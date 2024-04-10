@@ -1,0 +1,12 @@
+import numpy as np
+import torch
+
+SEED = 12345
+EEG_DATA_PATH = "U:/Year 5/Thesis/training/data/eeg/MRCP_data_av_conditions.mat"
+KIN_DATA_PATH = "U:/Year 5/Thesis/training/data/kin"
+EPOCHS = 200
+LEARNING_RATE = 1e-4
+ALPHA = 1
+DTYPE_NP = np.float32
+DTYPE_TORCH = torch.float32
+EEG_CHANNELS = [8, 45, 9, 12, 13, 14, 51, 18, 52, 19, 53, 23, 56, 24, 57, 25]
