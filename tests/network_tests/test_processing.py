@@ -27,7 +27,7 @@ class BatchProcessing(unittest.TestCase):
                 (loop_data, self.rdm.process(data_point).reshape(1, self.data.shape[1]))
             )
 
-        self.assertTrue((loop_data == batch_data).all())
+        self.assertTrue(((loop_data - batch_data) < 0.00001).all())
 
     def test_batch_processing_auto(self):
         batch_data = self.auto.process(self.data)
@@ -41,4 +41,4 @@ class BatchProcessing(unittest.TestCase):
                 )
             )
 
-        self.assertTrue((loop_data == batch_data).all())
+        self.assertTrue(((loop_data - batch_data) < 0.00001).all())

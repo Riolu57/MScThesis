@@ -255,14 +255,3 @@ class AutoDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx]
-
-
-if __name__ == "__main__":
-    kinematics_path = "D:/Uni/MSc Thesis/LeapData"
-    config_path = "../training/test.txt"
-    data = prepare_rdm_data(
-        "../training/data/eeg/MRCP_data_av_conditions.mat",
-        kinematics_path,
-        config_path,
-        "compute",
-    )
