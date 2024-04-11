@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from util.data import create_rdms
+
 
 class RDM_MLP(nn.Module):
     """Conditions need to be dim 1, number of channels dim 2, data/time points dim 3
@@ -34,27 +36,21 @@ class RDM_MLP(nn.Module):
         )
 
     @staticmethod
-    def reshape_data(data: torch.Tensor):
-        return data.transpose(2, 3)
+    def reshape_data(data):
+        """Assumes that the data is 4 dimensional"""
+        data_copy = data[:]
+        data_copy = data_copy.transpose(2, 3)
+        data_copy = data_copy.reshape(
+            data_copy.shape[0] * data_copy.shape[1] * data_copy.shape[2],
+            data_copy.shape[3],
+        )
+        return data_copy
 
     @staticmethod
-    def unshape_data(data: torch.Tensor):
-        return data.transpose(2, 3)
-
-    def forward_simple(self, data):
-        """Compute a single pass through the network of a multivariate time-series.
-        The entire modified time-series is returned.
-
-        :param data: A tensor of shape (num_channels, len_per_channel)
-        :return: network(data) of the same shape
-        """
-        outputs = torch.empty(0)
-
-        for data_point in data.T:
-            data_point_reshaped = data_point.reshape(1, self.in_dim)
-            outputs = torch.cat((outputs, self.process(data_point_reshaped)), 1)
-
-        return outputs
+    def unshape_data(data, shape):
+        data_copy = data[:]
+        data_copy = data_copy.reshape(shape[0], shape[1], shape[3], data.shape[1])
+        return data_copy.transpose(2, 3)
 
     def forward(self, data):
         """Compute an RDM based on 1 - R^2 of the passed signals.
@@ -62,21 +58,10 @@ class RDM_MLP(nn.Module):
         :param data: A tensor of shape (classes/conditions, inputs, time)
         :return: 1 - Corr(network(class_1), network(class_2), ..., network(class_N))
         """
-        outputs = torch.empty(0)
-        for batch in data:
-            cur_output = torch.empty(0)
-            for signal in batch:
-                cur_output = torch.cat((cur_output, self.forward_simple(signal)), 0)
+        reshaped_data = self.reshape_data(data)
+        processed_data = self.unshape_data(self.process(reshaped_data), data.shape)
 
-            corr = torch.corrcoef(cur_output)
-            ones = torch.ones_like(corr)
-
-            cur_rdm = ones - corr
-            cur_rdm = cur_rdm.reshape(1, data.shape[1], data.shape[1])
-
-            outputs = torch.cat((outputs, cur_rdm), 0)
-
-        return outputs
+        return create_rdms(torch.squeeze(processed_data))
 
 
 # for test

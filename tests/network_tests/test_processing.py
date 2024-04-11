@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 import torch
 
-from CONFIG import DTYPE_NP, DTYPE_TORCH
+from CONFIG import DTYPE_NP, DTYPE_TORCH, FLOAT_TOLERANCE
 
 from training.training_nn import RDM_MLP, AUTOENCODER
 
@@ -24,10 +24,10 @@ class BatchProcessing(unittest.TestCase):
         loop_data = torch.empty(0)
         for data_point in self.data:
             loop_data = torch.concatenate(
-                (loop_data, self.rdm.process(data_point).reshape(1, self.data.shape[1]))
+                (loop_data, self.rdm.process(data_point).reshape(1, 1))
             )
 
-        self.assertTrue(((loop_data - batch_data) < 0.00001).all())
+        self.assertTrue(((loop_data - batch_data) < FLOAT_TOLERANCE).all())
 
     def test_batch_processing_auto(self):
         batch_data = self.auto.process(self.data)
@@ -41,4 +41,4 @@ class BatchProcessing(unittest.TestCase):
                 )
             )
 
-        self.assertTrue(((loop_data - batch_data) < 0.00001).all())
+        self.assertTrue(((loop_data - batch_data) < FLOAT_TOLERANCE).all())

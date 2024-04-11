@@ -5,8 +5,14 @@ import torch
 
 from CONFIG import EEG_DATA_PATH, DTYPE_NP, EEG_CHANNELS, DTYPE_TORCH
 
-from util.data import load_eeg_data, split_data, RDMDataset, prepare_rdm_data
-from training.training_classic import create_rdms, preprocess_pca_data
+from util.data import (
+    load_eeg_data,
+    split_data,
+    RDMDataset,
+    prepare_rdm_data,
+    create_rdms,
+)
+from training.training_classic import preprocess_pca_data
 from training.training_nn import AUTOENCODER, RDM_MLP
 
 
@@ -271,7 +277,10 @@ class RSAEmbeddingReshaping(unittest.TestCase):
     def test_shaping_equivalence(self):
         self.assertTrue(
             (
-                self.model.unshape_data(self.model.reshape_data(self.data)) == self.data
+                self.model.unshape_data(
+                    self.model.reshape_data(self.data), self.data.shape
+                )
+                == self.data
             ).all()
         )
 
@@ -280,9 +289,7 @@ class RSAEmbeddingReshaping(unittest.TestCase):
             (
                 self.model.reshape_data(self.data).shape
                 == (
-                    self.data.shape[0],
-                    self.data.shape[1],
-                    self.data.shape[3],
+                    self.data.shape[0] * self.data.shape[1] * self.data.shape[3],
                     self.data.shape[2],
                 )
             )
@@ -297,9 +304,9 @@ class RSAEmbeddingReshaping(unittest.TestCase):
                         (
                             self.data[idx_0, idx_1, :, idx_3]
                             == reshaped_data[
-                                idx_0,
-                                idx_1,
-                                idx_3,
+                                idx_0 * self.data.shape[1] * self.data.shape[3]
+                                + idx_1 * self.data.shape[3]
+                                + idx_3,
                                 :,
                             ]
                         ).all()
