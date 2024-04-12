@@ -2,6 +2,7 @@ import torch.nn as nn
 import torch
 
 from CONFIG import DTYPE_TORCH
+from networks.rdm_network import RDM_MLP
 
 
 class AUTOENCODER(nn.Module):
@@ -21,20 +22,37 @@ class AUTOENCODER(nn.Module):
 
         self.in_dim = in_dim
 
-        self.process = nn.Sequential(
-            nn.Linear(self.in_dim, 20, dtype=DTYPE_TORCH),  # Layer 1 (in -> 20)
-            nn.ReLU(),
-            nn.Linear(20, 10, dtype=DTYPE_TORCH),  # Layer 4 (20 -> 10)
-            nn.ReLU(),
-            nn.Linear(10, 1, dtype=DTYPE_TORCH),  # Layer 5 (10 -> 1)
-            nn.ReLU(),
-            nn.Linear(1, 10, dtype=DTYPE_TORCH),  # Layer 5 (1 -> 10)
-            nn.ReLU(),
-            nn.Linear(10, 20, dtype=DTYPE_TORCH),  # Layer 4 (10 -> 20)
-            nn.ReLU(),
-            nn.Linear(20, self.in_dim, dtype=DTYPE_TORCH),  # Layer 1 (20 -> in)
-            nn.ReLU(),
-        )
+        ### Compex list manipulation to create reversed copy of sequential model of rdm_network ###
+        # Create RDM MLP to get architecture
+        subnetwork = RDM_MLP(self.in_dim)
+
+        # Get layers and copy for later modifications
+        layers = subnetwork.process
+        encoding = [layer for layer in layers]
+
+        # Get copy for later modification
+        decoding_start = encoding[:]
+        # Get non ReLU layers and inverse order
+        decoding_start = decoding_start[::2][::-1]
+        # Swap input and output dimensions
+        decoder_layers = list(map(self.swap_dims, decoding_start))
+        # Create decoder
+        decoding = [
+            layer
+            for combination in zip(decoder_layers, [nn.ReLU() for i in decoder_layers])
+            for layer in combination
+        ]
+
+        # Combine encoder and decoder and assign to expected variable
+        encoding.extend(decoding)
+        self.process = nn.Sequential(*encoding)
+
+    @staticmethod
+    def swap_dims(layer):
+        cur_layer = eval("nn." + repr(layer))
+        cur_layer.in_features = layer.out_features
+        cur_layer.out_features = layer.in_features
+        return cur_layer
 
     @staticmethod
     def reshape_data(data):

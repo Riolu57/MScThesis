@@ -23,17 +23,26 @@ def main(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
     random.seed(seed)
 
     torch.autograd.set_detect_anomaly(True)
-    eeg_data = load_eeg_data(eeg_path)
-    kin_data = load_kinematics_data(kin_path)
+    # eeg_data = load_eeg_data(eeg_path)
+    # kin_data = load_kinematics_data(kin_path)
 
-    # train_autoencoder_eeg(
-    #     seed,
-    #     eeg_path,
-    #     "U:/Year 5/Thesis/training/models/eeg_auto/v1/",
-    #     epochs,
-    #     learning_rate,
-    #     alpha,
-    # )
+    train_autoencoder_kin(
+        seed,
+        kin_path,
+        "U:/Year 5/Thesis/training/models/kin_auto/v1",
+        epochs,
+        learning_rate,
+        alpha,
+    )
+
+    train_autoencoder_eeg(
+        seed,
+        eeg_path,
+        "U:/Year 5/Thesis/training/models/eeg_auto/v1",
+        epochs,
+        learning_rate,
+        alpha,
+    )
 
     train_rsa_embedding(
         seed,

@@ -4,7 +4,7 @@ import torch
 SEED = 12345
 EEG_DATA_PATH = "U:/Year 5/Thesis/training/data/eeg/MRCP_data_av_conditions.mat"
 KIN_DATA_PATH = "U:/Year 5/Thesis/training/data/kin"
-EPOCHS = 200
+EPOCHS = 1000
 LEARNING_RATE = 1e-4
 ALPHA = 1
 DTYPE_NP = np.float32

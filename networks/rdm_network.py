@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
+from CONFIG import DTYPE_TORCH
+
 from util.data import create_rdms
 
 
@@ -23,15 +25,15 @@ class RDM_MLP(nn.Module):
         self.in_dim = in_dim
 
         self.process = nn.Sequential(
-            nn.Linear(self.in_dim, 20),
+            nn.Linear(self.in_dim, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
-            nn.Linear(20, 20),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
-            nn.Linear(20, 20),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
-            nn.Linear(20, 10),
+            nn.Linear(20, 10, dtype=DTYPE_TORCH),
             nn.ReLU(),
-            nn.Linear(10, 1),
+            nn.Linear(10, 1, dtype=DTYPE_TORCH),
             nn.ReLU(),
         )
 

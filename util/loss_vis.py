@@ -29,7 +29,7 @@ def plot_loss(common_path):
     plt.xlabel("Epoch")
     plt.legend()
 
-    plt.savefig(os.path.join(common_path, "loss_plot.pdf"), bbox_inches="tight")
+    plt.savefig(os.path.join(common_path, "_loss_plot.pdf"), bbox_inches="tight")
 
 
 def plot_rdms(eeg_rsa, kin_rsa, names):
@@ -129,5 +129,5 @@ def vis_eeg(data_path: str):
 
 
 if __name__ == "__main__":
-    common_path = "/training/models/v9"
+    common_path = "U:/Year 5/Thesis/training/models/kin_auto/v1"
     plot_loss(common_path)

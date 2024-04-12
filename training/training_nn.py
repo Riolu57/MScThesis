@@ -105,7 +105,7 @@ def train_autoencoder_kin(seed, kin_path, model_path, epochs, learning_rate, alp
     val_data = AutoDataset(val_data)
     test_data = AutoDataset(test_data)
 
-    model = AUTOENCODER(train_data[0].shape[2])
+    model = AUTOENCODER(train_data[0][0].shape[2])
 
     train_network(
         model,
