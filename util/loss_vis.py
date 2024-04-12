@@ -3,26 +3,46 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 
 
+def get_subdirs(path):
+    dir_names = os.listdir(path)
+    dir_names = [
+        dir_name
+        for dir_name in dir_names
+        if os.path.isdir(os.path.join(path, dir_name))
+    ]
+    return dir_names
+
+
 def plot_loss(common_path):
-    file_name = "data.txt"
+    # Iterate through different models and subfolders to get last version
+    dir_names = get_subdirs(common_path)
 
-    with open(os.path.join(common_path, file_name), "r") as f:
-        lines = f.readlines()
+    for dir_name in dir_names:
+        version_dirs = get_subdirs(os.path.join(common_path, dir_name))
 
-    train_loss = [float(t[2:]) for t in lines if t[0] == "T"]
-    val_loss = [float(t[2:]) for t in lines if t[0] == "V"]
+        latest = sorted(version_dirs)[-1]
 
-    min_y = min(min(train_loss), min(val_loss))
-    max_y = max(max(train_loss), max(val_loss))
+        file_name = "data.txt"
 
-    max_y *= 1.05
-    min_y *= 0.95
+        with open(os.path.join(common_path, dir_name, latest, file_name), "r") as f:
+            lines = f.readlines()
 
-    for i in range(0, len(train_loss), 10):
-        plt.vlines(i, min_y, max_y, colors="k", linestyles="--")
+        train_loss = [float(t[2:]) for t in lines if t[0] == "T"]
+        val_loss = [float(t[2:]) for t in lines if t[0] == "V"]
 
-    plt.plot(train_loss, "--", label=f"Train", color="g")
-    plt.plot(val_loss, "-o", label=f"Val.", color="r")
+        min_y = min(min(train_loss), min(val_loss))
+        max_y = max(max(train_loss), max(val_loss))
+
+        max_y *= 1.05
+        min_y *= 0.95
+
+        for i in range(0, len(train_loss), 100):
+            plt.vlines(i, min_y, max_y, colors="k", linestyles="-", alpha=0.9)
+
+        name = " ".join(dir_name.capitalize().split("_"))
+
+        plt.plot(train_loss, "--", label=f"{name} Train")
+        plt.plot(val_loss, "-o", label=f"{name} Val.")
 
     plt.title("Loss Plot")
     plt.ylabel("Loss")
@@ -129,5 +149,5 @@ def vis_eeg(data_path: str):
 
 
 if __name__ == "__main__":
-    common_path = "U:/Year 5/Thesis/training/models/kin_auto/v1"
+    common_path = "U:/Year 5/Thesis/training/models"
     plot_loss(common_path)
