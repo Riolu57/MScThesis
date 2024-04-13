@@ -35,7 +35,7 @@ class AUTOENCODER(nn.Module):
         # Get non ReLU layers and inverse order
         decoding_start = decoding_start[::2][::-1]
         # Swap input and output dimensions
-        decoder_layers = list(map(self.swap_dims, decoding_start))
+        decoder_layers = list(map(self.create_swapped_linear, decoding_start))
         # Create decoder
         decoding = [
             layer
@@ -48,11 +48,8 @@ class AUTOENCODER(nn.Module):
         self.process = nn.Sequential(*encoding)
 
     @staticmethod
-    def swap_dims(layer):
-        cur_layer = eval("nn." + repr(layer))
-        cur_layer.in_features = layer.out_features
-        cur_layer.out_features = layer.in_features
-        return cur_layer
+    def create_swapped_linear(layer):
+        return nn.Linear(layer.out_features, layer.in_features)
 
     @staticmethod
     def reshape_data(data):

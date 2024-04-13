@@ -26,29 +26,29 @@ def main(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
     # eeg_data = load_eeg_data(eeg_path)
     # kin_data = load_kinematics_data(kin_path)
 
-    train_autoencoder_kin(
-        seed,
-        kin_path,
-        "U:/Year 5/Thesis/training/models/kin_auto/v1",
-        epochs,
-        learning_rate,
-        alpha,
-    )
-
-    train_autoencoder_eeg(
-        seed,
-        eeg_path,
-        "U:/Year 5/Thesis/training/models/eeg_auto/v1",
-        epochs,
-        learning_rate,
-        alpha,
-    )
+    # train_autoencoder_kin(
+    #     seed,
+    #     kin_path,
+    #     "U:/Year 5/Thesis/training/models/kin_auto/001",
+    #     epochs,
+    #     learning_rate,
+    #     alpha,
+    # )
+    #
+    # train_autoencoder_eeg(
+    #     seed,
+    #     eeg_path,
+    #     "U:/Year 5/Thesis/training/models/eeg_auto/001",
+    #     epochs,
+    #     learning_rate,
+    #     alpha,
+    # )
 
     train_rsa_embedding(
         seed,
         eeg_path,
         kin_path,
-        "U:/Year 5/Thesis/training/models/rsa_emb/v10/",
+        "U:/Year 5/Thesis/training/models/rsa_emb/010",
         epochs,
         learning_rate,
         alpha,
@@ -57,7 +57,7 @@ def main(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
     # training_loss_pca, pca_eeg, pca_kin = ana_pca(eeg_data, kin_data)
     # plot_rdms(pca_eeg, pca_kin, names=["PCA"])
 
-    plot_loss("U:/Year 5/Thesis/training/models/eeg_auto/v1")
+    plot_loss("U:/Year 5/Thesis/training/models")
 
 
 if __name__ == "__main__":

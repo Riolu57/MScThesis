@@ -13,7 +13,11 @@ def get_subdirs(path):
     return dir_names
 
 
-def plot_loss(common_path):
+def normalize_list(val_list, max_val):
+    return [i / max_val for i in val_list]
+
+
+def plot_loss(common_path, normalize=False):
     # Iterate through different models and subfolders to get last version
     dir_names = get_subdirs(common_path)
 
@@ -29,6 +33,11 @@ def plot_loss(common_path):
 
         train_loss = [float(t[2:]) for t in lines if t[0] == "T"]
         val_loss = [float(t[2:]) for t in lines if t[0] == "V"]
+
+        if normalize:
+            max_val = max(train_loss)
+            train_loss = normalize_list(train_loss, max_val)
+            val_loss = normalize_list(val_loss, max_val)
 
         min_y = min(min(train_loss), min(val_loss))
         max_y = max(max(train_loss), max(val_loss))
