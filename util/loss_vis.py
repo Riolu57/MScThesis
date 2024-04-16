@@ -1,16 +1,11 @@
 import os
+import torch
+
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 
-
-def get_subdirs(path):
-    dir_names = os.listdir(path)
-    dir_names = [
-        dir_name
-        for dir_name in dir_names
-        if os.path.isdir(os.path.join(path, dir_name))
-    ]
-    return dir_names
+from util.data import create_rdms, get_subdirs
+from util.network_loading import get_auto_inference_network, get_rdm_inference_network
 
 
 def normalize_list(val_list, max_val):
@@ -81,7 +76,7 @@ def plot_rdms(eeg_rsa, kin_rsa, names):
     for column_idx in range(plot_len):
         for row_idx in range(len(eeg_rsa)):
             im = subfigs[row_idx, column_idx].imshow(
-                (eeg_rsa[row_idx][column_idx] - kin_rsa[row_idx][column_idx])
+                (eeg_rsa[row_idx][column_idx] - kin_rsa[column_idx])
             )
 
     subfigs[row_idx, column_idx].cax.colorbar(im)
@@ -100,6 +95,22 @@ def plot_rdms(eeg_rsa, kin_rsa, names):
 
     plt.tight_layout()
     plt.show()
+
+
+def compute_rdm_rdms(netowork_path, data):
+    network = get_rdm_inference_network(netowork_path, data.shape[3])
+    return compute_network_rdms(network, data)
+
+
+def compute_auto_rdms(network_path, data):
+    network = get_auto_inference_network(network_path, data.shape[3])
+    return compute_network_rdms(network, data)
+
+
+def compute_network_rdms(network, data):
+    network.eval()
+    network_data = network(data)
+    return create_rdms(torch.squeeze(network_data))
 
 
 def vis_eeg(data_path: str):

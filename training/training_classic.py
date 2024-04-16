@@ -53,7 +53,7 @@ def get_pca_data(eeg_data, kin_data):
     pass
 
 
-def ana_pca(eeg_data_training, kin_data_training):
+def ana_pca(eeg_data_training, kin_rdms):
     # Generate PCA with 1 component; to allow for easy correlation down the lone
     pca = PCA(n_components=1, copy=True, whiten=False, svd_solver="full")
 
@@ -94,10 +94,8 @@ def ana_pca(eeg_data_training, kin_data_training):
 
     accumulated_data = create_rdms(accumulated_data)
 
-    labels = create_kin_rdms(kin_data_training)
-
     loss = np.array([])
-    for mat_eeg, mat_kin in zip(accumulated_data, labels):
+    for mat_eeg, mat_kin in zip(accumulated_data, kin_rdms):
         loss = np.append(loss, fro_loss(mat_eeg, mat_kin))
 
-    return loss, accumulated_data, labels
+    return loss, accumulated_data
