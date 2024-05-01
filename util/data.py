@@ -206,6 +206,31 @@ def create_kin_rdms(kin_data):
     return labels
 
 
+def create_eeg_data(eeg_data: torch.Tensor):
+    data_copy = eeg_data[:]
+    return torch.reshape(
+        data_copy,
+        (
+            eeg_data.shape[0] * eeg_data.shape[1],
+            eeg_data.shape[2],
+            eeg_data.shape[3],
+            eeg_data.shape[4],
+        ),
+    )
+
+
+def uncreate_eeg_data(combined_eeg_data, new_shape):
+    data = torch.empty(*new_shape)
+
+    for participant_idx in range(new_shape[0]):
+        for grasp_idx in range(new_shape[1]):
+            data[participant_idx, grasp_idx] = torch.as_tensor(
+                combined_eeg_data[participant_idx * new_shape[1] + grasp_idx]
+            )
+
+    return data
+
+
 class RDMDataset(Dataset):
     def __init__(self, eeg_data, kinematics_data):
         self.labels = self.create_rdms(kinematics_data)
@@ -226,23 +251,7 @@ class RDMDataset(Dataset):
 
     @staticmethod
     def process_eeg(eeg_data):
-        data = torch.empty(
-            (
-                eeg_data.shape[0] * eeg_data.shape[1],
-                eeg_data.shape[2],
-                eeg_data.shape[3],
-                eeg_data.shape[4],
-            )
-        )
-
-        for participant_idx in range(eeg_data.shape[0]):
-            data[
-                participant_idx
-                * eeg_data.shape[1] : (participant_idx + 1)
-                * eeg_data.shape[1]
-            ] = torch.as_tensor(eeg_data[participant_idx])
-
-        return data
+        return create_eeg_data(eeg_data)
 
 
 class AutoDataset(Dataset):

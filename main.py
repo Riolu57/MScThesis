@@ -9,7 +9,7 @@ from training.training_nn import (
     train_rsa_embedding,
 )
 
-from training.training_classic import ana_pca, create_kin_rdms
+from training.training_classic import ana_pca, create_kin_rdms, ana_ica
 
 from util.data import load_eeg_data, load_kinematics_data
 from util.loss_vis import plot_rdms, plot_loss, compute_rdm_rdms, compute_auto_rdms
@@ -61,11 +61,16 @@ def main(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
     # )
 
     training_loss_pca, pca_eeg = ana_pca(eeg_data, kin_rdms)
+    training_loss_ica, ica_eeg = ana_ica(eeg_data, kin_rdms)
     kin_auto_rdms = compute_auto_rdms(kin_auto_path, kin_data)
     eeg_auto_rdms = compute_auto_rdms(eeg_auto_path, eeg_data)
     rdm_rdms = compute_rdm_rdms(rsa_path, eeg_data)
 
-    plot_rdms(pca_eeg, kin_rdms, names=["PCA"])
+    eeg_rdms = [pca_eeg, ica_eeg, kin_auto_rdms, eeg_auto_rdms, rdm_rdms]
+
+    plot_rdms(
+        eeg_rdms, kin_rdms, names=["PCA", "ICA", "Kin Auto", "EEG Auto", "RDM Emb."]
+    )
 
     plot_loss("./training/models")
 

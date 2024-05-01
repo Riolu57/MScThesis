@@ -4,7 +4,7 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 
-from util.data import create_rdms, get_subdirs
+from util.data import create_rdms, get_subdirs, create_eeg_data
 from util.network_loading import get_auto_inference_network, get_rdm_inference_network
 
 
@@ -12,7 +12,7 @@ def normalize_list(val_list, max_val):
     return [i / max_val for i in val_list]
 
 
-def plot_loss(common_path, normalize=False):
+def plot_loss(common_path, normalize=True):
     # Iterate through different models and subfolders to get last version
     dir_names = get_subdirs(common_path)
 
@@ -58,14 +58,15 @@ def plot_loss(common_path, normalize=False):
 
 def plot_rdms(eeg_rsa, kin_rsa, names):
     plot_len = 6
+    scaling_factor: int = 2
 
-    fig = plt.figure(figsize=(3 * plot_len, 3))
+    fig = plt.figure(figsize=(scaling_factor * plot_len, scaling_factor * len(eeg_rsa)))
 
     subfigs = ImageGrid(
         fig,
         111,  # as in plt.subplot(111)
-        nrows_ncols=(2, plot_len),
-        axes_pad=0.15,
+        nrows_ncols=(len(eeg_rsa), plot_len),
+        axes_pad=0.1,
         share_all=True,
         cbar_location="right",
         cbar_mode="single",
@@ -75,12 +76,15 @@ def plot_rdms(eeg_rsa, kin_rsa, names):
 
     for column_idx in range(plot_len):
         for row_idx in range(len(eeg_rsa)):
-            im = subfigs[row_idx, column_idx].imshow(
-                (eeg_rsa[row_idx][column_idx] - kin_rsa[column_idx])
+            im = subfigs[plot_len * row_idx + column_idx].imshow(
+                (
+                    eeg_rsa[row_idx][column_idx].detach().numpy()
+                    - kin_rsa[column_idx].detach().numpy()
+                )
             )
 
-    subfigs[row_idx, column_idx].cax.colorbar(im)
-    subfigs[row_idx, column_idx].cax.toggle_label(True)
+    subfigs[plot_len * row_idx + column_idx].cax.colorbar(im)
+    subfigs[plot_len * row_idx + column_idx].cax.toggle_label(True)
 
     cols = [f"Grasp Phase {idx + 1}" for idx in range(plot_len)]
 
@@ -89,7 +93,9 @@ def plot_rdms(eeg_rsa, kin_rsa, names):
 
     for axes, row in zip(subfigs.axes_row, names):
         for ax in axes:
-            ax.set_ylabel(row, rotation=0, size="large")
+            ax.set_ylabel(row, rotation=90, size="large")
+            ax.set_xticks([i for i in range(0, kin_rsa.shape[1], 2)])
+            ax.set_yticks([i for i in range(0, kin_rsa.shape[1], 2)])
 
     plt.title("Difference Between Goal and Actual RDM")
 
@@ -99,7 +105,8 @@ def plot_rdms(eeg_rsa, kin_rsa, names):
 
 def compute_rdm_rdms(netowork_path, data):
     network = get_rdm_inference_network(netowork_path, data.shape[3])
-    return compute_network_rdms(network, data)
+    new_data = create_eeg_data(torch.as_tensor(data))
+    return compute_network_rdms(network, new_data)
 
 
 def compute_auto_rdms(network_path, data):
@@ -109,8 +116,7 @@ def compute_auto_rdms(network_path, data):
 
 def compute_network_rdms(network, data):
     network.eval()
-    network_data = network(data)
-    return create_rdms(torch.squeeze(network_data))
+    return network(torch.as_tensor(data))
 
 
 def vis_eeg(data_path: str):

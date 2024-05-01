@@ -11,6 +11,8 @@ from util.data import (
     RDMDataset,
     prepare_rdm_data,
     create_rdms,
+    create_eeg_data,
+    uncreate_eeg_data,
 )
 from training.training_classic import preprocess_pca_data
 from training.training_nn import AUTOENCODER, RDM_MLP
@@ -311,3 +313,46 @@ class RSAEmbeddingReshaping(unittest.TestCase):
                             ]
                         ).all()
                     )
+
+
+class EEGPreReshaping(unittest.TestCase):
+    @classmethod
+    def setUpClass(self) -> None:
+        gen = np.random.default_rng(seed=None)
+        # Generate data of shape (subject * grasping phase x condition x channels x time steps),
+        # since RDMDatasets are used
+        self.data = torch.as_tensor(
+            gen.random((2, 3, 4, 20, 5), dtype=DTYPE_NP), dtype=DTYPE_TORCH
+        )
+
+    def test_shaping_equivalence(self):
+        self.assertTrue(
+            (
+                uncreate_eeg_data(create_eeg_data(self.data), self.data.shape)
+                == self.data
+            ).all()
+        )
+
+    def test_shape(self):
+        self.assertTrue(
+            (
+                create_eeg_data(self.data).shape
+                == (
+                    self.data.shape[0] * self.data.shape[1],
+                    self.data.shape[2],
+                    self.data.shape[3],
+                    self.data.shape[4],
+                )
+            )
+        )
+
+    def test_content_order(self):
+        reshaped_data = create_eeg_data(self.data)
+        for idx_0 in range(self.data.shape[0]):
+            for idx_1 in range(self.data.shape[1]):
+                self.assertTrue(
+                    (
+                        self.data[idx_0, idx_1]
+                        == reshaped_data[idx_0 * self.data.shape[1] + idx_1]
+                    ).all()
+                )

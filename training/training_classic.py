@@ -1,8 +1,9 @@
-from sklearn.decomposition import PCA
+from sklearn.decomposition import PCA, FastICA
 import torch
 import numpy as np
 from networks.loss import fro_loss
 from util.data import create_kin_rdms, create_rdms
+from CONFIG import SEED
 
 
 def preprocess_pca_data(eeg_data, kin_data):
@@ -49,42 +50,60 @@ def preprocess_training_data(data):
     return result
 
 
-def get_pca_data(eeg_data, kin_data):
-    pass
+def ana_ica(eeg_data_training, kin_rdms):
+    return classic_training_loop(
+        FastICA(
+            n_components=1,
+            algorithm="parallel",
+            whiten="unit-variance",
+            max_iter=1000,
+            tol=1e-5,
+            random_state=SEED,
+        ),
+        eeg_data_training,
+        kin_rdms,
+    )
 
 
 def ana_pca(eeg_data_training, kin_rdms):
-    # Generate PCA with 1 component; to allow for easy correlation down the lone
-    pca = PCA(n_components=1, copy=True, whiten=False, svd_solver="full")
+    # Generate PCA with 1 component; to allow for easy correlation down the line
 
+    return classic_training_loop(
+        PCA(n_components=1, copy=True, whiten=False, svd_solver="full"),
+        eeg_data_training,
+        kin_rdms,
+    )
+
+
+def classic_training_loop(base_embedder, eeg_data, kin_rdms):
     # Save time serieses locally, then compute rdms for participants
     accumulated_data = torch.empty(
         (
-            eeg_data_training.shape[0] * eeg_data_training.shape[1],
-            eeg_data_training.shape[2],
-            eeg_data_training.shape[4],
+            eeg_data.shape[0] * eeg_data.shape[1],
+            eeg_data.shape[2],
+            eeg_data.shape[4],
         )
     )
 
     accumulated_data[:] = np.nan
 
     # Per phase, condition and time we want to fit PCA
-    for phase_idx in range(eeg_data_training.shape[1]):
-        for condition_idx in range(eeg_data_training.shape[2]):
-            for time_idx in range(eeg_data_training.shape[4]):
-                pca = pca.fit(
-                    eeg_data_training[:, phase_idx, condition_idx, :, time_idx]
+    for phase_idx in range(eeg_data.shape[1]):
+        for condition_idx in range(eeg_data.shape[2]):
+            for time_idx in range(eeg_data.shape[4]):
+                base_embedder = base_embedder.fit(
+                    eeg_data[:, phase_idx, condition_idx, :, time_idx]
                 )
 
                 # Afterwards transform per participant and create RDM
-                for subject_idx in range(eeg_data_training.shape[0]):
+                for subject_idx in range(eeg_data.shape[0]):
                     accumulated_data[
-                        subject_idx * eeg_data_training.shape[1] + phase_idx,
+                        subject_idx * eeg_data.shape[1] + phase_idx,
                         condition_idx,
                         time_idx,
                     ] = torch.as_tensor(
-                        pca.transform(
-                            eeg_data_training[
+                        base_embedder.transform(
+                            eeg_data[
                                 subject_idx, phase_idx, condition_idx, :, time_idx
                             ].reshape(1, 16)
                         )

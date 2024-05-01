@@ -21,7 +21,7 @@ training
 │       │   ├── DataMeasures_SC_S4.mat
 │       │   ├── DataMeasures_SS_S4.mat
 │       │   └── indexes_trials.mat
-    ...
+   ...
 │       └── subject18
 │           ├── DataMeasures_LC_S3.mat
 │           ├── DataMeasures_LS_S3.mat
