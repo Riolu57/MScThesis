@@ -1,10 +1,11 @@
+from CONFIG import DTYPE_TORCH
+from util.type_hints import *
+
 import torch
 import torch.nn as nn
 import numpy as np
 
-from CONFIG import DTYPE_TORCH
-
-from util.data import create_rdms
+from data.rdms import create_rdms
 
 
 class RDM_MLP(nn.Module):
@@ -38,8 +39,11 @@ class RDM_MLP(nn.Module):
         )
 
     @staticmethod
-    def reshape_data(data):
-        """Assumes that the data is 4 dimensional"""
+    def reshape_data(data: DataConstruct) -> DataConstruct:
+        """Reshapes data to be easily processed by network.
+        @param data: A 4D DataConstruct, where dimension 2 are the input channels and 3 the time points.
+        @return: A 2D DataConstruct reshaped, such that model(model.reshape_data(data)) is as fast as possible.
+        """
         data_copy = data[:]
         data_copy = data_copy.transpose(2, 3)
         data_copy = data_copy.reshape(
@@ -49,7 +53,12 @@ class RDM_MLP(nn.Module):
         return data_copy
 
     @staticmethod
-    def unshape_data(data, shape):
+    def unshape_data(data: DataConstruct, shape: DataShape) -> DataConstruct:
+        """Reshapes model output to old shape, given the data.
+        @param data: Model output data, to be reshaped.
+        @param shape: The shape of the old data.
+        @return: The model data reshaped to its original size.
+        """
         data_copy = data[:]
         data_copy = data_copy.reshape(shape[0], shape[1], shape[3], data.shape[1])
         return data_copy.transpose(2, 3)
@@ -57,38 +66,10 @@ class RDM_MLP(nn.Module):
     def forward(self, data):
         """Compute an RDM based on 1 - R^2 of the passed signals.
 
-        :param data: A tensor of shape (classes/conditions, inputs, time)
-        :return: 1 - Corr(network(class_1), network(class_2), ..., network(class_N))
+        @param data: A tensor of shape (classes/conditions, inputs, time)
+        @return: 1 - Corr(network(class_1), network(class_2), ..., network(class_N))
         """
         reshaped_data = self.reshape_data(data)
         processed_data = self.unshape_data(self.process(reshaped_data), data.shape)
 
         return create_rdms(torch.squeeze(processed_data))
-
-
-# class RDM_RNN(nn.RNN):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#     def forward(self, input: Tensor, hx: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
-#
-
-
-# for test
-if __name__ == "__main__":
-    net = RDM_MLP(2)
-    net.eval()
-    input = torch.as_tensor(
-        np.array(
-            [
-                [[1, 2, 3, 4], [1, 2, 3, 4]],
-                [[2, 3, 4, 5], [2, 3, 4, 5]],
-                [[0, 1, 2, 3], [0, 1, 2, 3]],
-            ],
-            dtype="float32",
-        )
-    )
-    # input = input.reshape(2, 4)
-    print(f"{input.shape=}")
-    # print(torch.corrcoef(input))
-    print(net(input))

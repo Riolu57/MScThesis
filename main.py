@@ -12,7 +12,7 @@ from training.training_nn import (
 
 from training.training_classic import ana_pca, create_kin_rdms, ana_ica
 
-from util.data import load_eeg_data, load_kinematics_data
+from data.loading import load_kinematics_data, load_eeg_data
 from util.loss_vis import plot_rdms, plot_loss, compute_rdm_rdms, compute_auto_rdms
 
 # TODO: ENSURE THAT CONCATENATIONS LEAVE ORDER OF MATRICES/CONDITIONS IN-TACT

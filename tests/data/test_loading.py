@@ -4,7 +4,7 @@ import numpy as np
 import torch
 
 from CONFIG import EEG_DATA_PATH, KIN_DATA_PATH, DTYPE_NP
-from util.data import load_eeg_data, load_kinematics_data
+from data.loading import load_kinematics_data, load_eeg_data
 
 
 class EEGLoading(unittest.TestCase):

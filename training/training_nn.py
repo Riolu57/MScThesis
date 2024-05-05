@@ -1,19 +1,18 @@
+# TypeHint only imports
+from util.type_hints import *
+from typing import Callable, Iterable
+from torch.utils.data import Dataset
+
 from torch.nn import MSELoss, RNN
 
 from networks.autoencoder import AUTOENCODER
 from networks.rdm_network import RDM_MLP
 
-from training.basic_loops import train_loop, test_loop, rnn_train_loop, rnn_test_loop
+from training.basic_loops import train_loop, test_loop
 from networks.loss import fro_loss
 
-from util.data import (
-    prepare_rdm_data,
-    prepare_rdm_data_rnn,
-    split_data,
-    AutoDataset,
-    load_eeg_data,
-    load_kinematics_data,
-)
+from data.loading import load_kinematics_data, load_eeg_data, split_data
+from data.datasets import AutoDataset, prepare_rdm_data, prepare_rdm_data_rnn
 
 from torch.utils.data import DataLoader
 import torch
@@ -23,8 +22,26 @@ import random
 
 
 def train_network(
-    model, loss, datasets, seed, model_path, epochs, learning_rate, alpha
-):
+    model: torch.nn.Module,
+    loss: Callable,
+    datasets: Iterable[Dataset, Dataset, Dataset],
+    seed: int,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains a given network and saves it in the passed location.
+    @param model: The network to be trained.
+    @param loss: The loss function to be used for the model.
+    @param datasets: The torch datasets containing training, validation and testing data; passed as a tuple or list.
+    @param seed: A seed to be used for the experiment.
+    @param model_path: Path to save the model after each epoch.
+    @param epochs: How many epochs the model will be trained for.
+    @param learning_rate: The learning rate; used for ADAM optimizer.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @return: None.
+    """
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -59,8 +76,25 @@ def train_network(
 
 
 def train_rsa_embedding(
-    seed, eeg_path, kin_path, model_path, epochs, learning_rate, alpha
-):
+    seed: int,
+    eeg_path: str,
+    kin_path: str,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains an MLP which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param seed: Seed for the experiment.
+    @param eeg_path: Path where EEG data is saved.
+    @param kin_path: Path where Kinematics data is saved.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @return: None.
+    """
     model = RDM_MLP(16)
     train_data, val_data, test_data = prepare_rdm_data(eeg_path, kin_path)
 
@@ -76,7 +110,24 @@ def train_rsa_embedding(
     )
 
 
-def train_autoencoder_eeg(seed, eeg_path, model_path, epochs, learning_rate, alpha):
+def train_autoencoder_eeg(
+    seed: int,
+    eeg_path: str,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains an MLP Autoencoder using EEG data.
+
+    @param seed: Seed for the experiment.
+    @param eeg_path: Path where EEG data is saved.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @return: None.
+    """
     train_data, val_data, test_data = split_data(load_eeg_data(eeg_path))
 
     train_data = AutoDataset(train_data)
@@ -99,7 +150,24 @@ def train_autoencoder_eeg(seed, eeg_path, model_path, epochs, learning_rate, alp
     )
 
 
-def train_autoencoder_kin(seed, kin_path, model_path, epochs, learning_rate, alpha):
+def train_autoencoder_kin(
+    seed: int,
+    kin_path: str,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains an MLP Autoencoder using EEG data.
+
+    @param seed: Seed for the experiment.
+    @param kin_path: Path where Kinematics data is saved.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @return: None.
+    """
     train_data, val_data, test_data = split_data(load_kinematics_data(kin_path))
 
     train_data = AutoDataset(train_data)
@@ -120,7 +188,26 @@ def train_autoencoder_kin(seed, kin_path, model_path, epochs, learning_rate, alp
     )
 
 
-def train_rnn_rdm(seed, eeg_path, kin_path, model_path, epochs, learning_rate, alpha):
+def train_rnn_rdm(
+    seed: int,
+    eeg_path: str,
+    kin_path: str,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param seed: Seed for the experiment.
+    @param eeg_path: Path where EEG data is saved.
+    @param kin_path: Path where Kinematics data is saved.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @return: None.
+    """
     model = RNN(
         input_size=16,
         hidden_size=1,
@@ -147,7 +234,7 @@ def train_rnn_rdm(seed, eeg_path, kin_path, model_path, epochs, learning_rate, a
         print(
             f"======================================== CURRENT EPOCH: {epoch + 1} ========================================"
         )
-        rnn_train_loop(
+        train_loop(
             f"{model_path}/data.txt",
             train_loader,
             model,
@@ -163,7 +250,4 @@ def train_rnn_rdm(seed, eeg_path, kin_path, model_path, epochs, learning_rate, a
             },
             f"{model_path}/epoch_{epoch}",
         )
-        rnn_test_loop(f"{model_path}/data.txt", val_loader, model, MSELoss())
-
-
-# Create RNN that takes EEG data and then predicts Kin Data, with a hidden layer of size 1
+        test_loop(f"{model_path}/data.txt", val_loader, model, MSELoss())

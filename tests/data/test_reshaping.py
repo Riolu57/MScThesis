@@ -5,15 +5,10 @@ import torch
 
 from CONFIG import EEG_DATA_PATH, DTYPE_NP, EEG_CHANNELS, DTYPE_TORCH
 
-from util.data import (
-    load_eeg_data,
-    split_data,
-    RDMDataset,
-    prepare_rdm_data,
-    create_rdms,
-    create_eeg_data,
-    uncreate_eeg_data,
-)
+from data.rdms import create_rdms
+from data.reshaping import create_eeg_data, uncreate_eeg_data
+from data.loading import load_eeg_data, split_data
+from data.datasets import RDMDataset, prepare_rdm_data
 from training.training_classic import preprocess_pca_data
 from training.training_nn import AUTOENCODER, RDM_MLP
 

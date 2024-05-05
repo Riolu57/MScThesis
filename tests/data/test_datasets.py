@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import torch
 
-from util.data import AutoDataset, RDMDataset
+from data.datasets import RDMDataset, AutoDataset
 
 from CONFIG import DTYPE_NP, DTYPE_TORCH
 

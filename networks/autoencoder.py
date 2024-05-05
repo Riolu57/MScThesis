@@ -1,21 +1,13 @@
+from util.type_hints import *
+
 import torch.nn as nn
 import torch
 
-from CONFIG import DTYPE_TORCH
 from networks.rdm_network import RDM_MLP
 
 
 class AUTOENCODER(nn.Module):
-    """Conditions need to be dim 1, number of channels dim 2, data/time points dim 3
-    Example array with 3 conditions, 2 channels and 4 points per channel:
-    np.array(
-        [
-            [[1, 2, 3, 4], [1, 2, 3, 4]],
-            [[2, 3, 4, 5], [2, 3, 4, 5]],
-            [[0, 1, 2, 3], [0, 1, 2, 3]]
-        ],
-        dtype="float64")
-    """
+    """Participants need to be dim 0, grasp phase dim 1, Conditions need to be dim 2, number of channels dim 3, data/time points dim 4"""
 
     def __init__(self, in_dim: int):
         super().__init__()
@@ -48,12 +40,19 @@ class AUTOENCODER(nn.Module):
         self.process = nn.Sequential(*encoding)
 
     @staticmethod
-    def create_swapped_linear(layer):
+    def create_swapped_linear(layer: torch.nn.Linear) -> torch.nn.Linear:
+        """Creates a linear layer with swapped in-/output feature dimensions that is returned.
+        @param layer: Linear layer to be swapped.
+        @return: Copy of passed layer where input/output dimensions are swapped.
+        """
         return nn.Linear(layer.out_features, layer.in_features)
 
     @staticmethod
-    def reshape_data(data):
-        """Assumes that the data is 5 dimensional"""
+    def reshape_data(data: DataConstruct) -> DataConstruct:
+        """Reshapes data to be easily processed by network.
+        @param data: A 5D DataConstruct, where dimension 3 are the input channels and 4 the time points.
+        @return: A 2D DataConstruct reshaped, such that model(model.reshape_data(data)) is as fast as possible.
+        """
         data_copy = data[:]
         data_copy = data_copy.transpose(3, 4)
         data_copy = data_copy.reshape(
@@ -66,12 +65,21 @@ class AUTOENCODER(nn.Module):
         return data_copy
 
     @staticmethod
-    def unshape_data(data, shape):
+    def unshape_data(data: DataConstruct, shape: DataShape) -> DataConstruct:
+        """Reshapes model output to old shape, given the data.
+        @param data: Model output data, to be reshaped.
+        @param shape: The shape of the old data.
+        @return: The model data reshaped to its original size.
+        """
         data_copy = data[:]
         data_copy = data_copy.reshape(shape[0], shape[1], shape[2], shape[4], shape[3])
         return data_copy.transpose(3, 4)
 
-    def forward(self, data):
+    def forward(self, data: torch.Tensor) -> torch.Tensor:
+        """Computes the model output given some data.
+        @param data: Input data. Expected to be 5D, where dim 3 are the input channels.
+        @return: Model output of same shape as input.
+        """
         new_data = self.reshape_data(data)
 
         return self.unshape_data(self.process(new_data), data.shape)

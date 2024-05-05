@@ -4,7 +4,9 @@ import torch
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import ImageGrid
 
-from util.data import create_rdms, get_subdirs, create_eeg_data
+from util.paths import get_subdirs
+from data.rdms import create_rdms
+from data.reshaping import create_eeg_data
 from util.network_loading import get_auto_inference_network, get_rdm_inference_network
 
 
@@ -123,7 +125,7 @@ def vis_eeg(data_path: str):
     """Loads a matlab matrix and expects the four arrays 'mean_MRCP_XX_precision5', with XX \in {LC, LS, SC, SS}.
     Will split the data into different phases, Regions of Interest, grasps and subjects.
 
-    :return: Two matrices, representing the input and output for an RNN. The data matrix is of shape ()
+    @return: Two matrices, representing the input and output for an RNN. The data matrix is of shape ()
     """
     # (1200ms x 64 electrodes x 16 subject x 3 grasp_types*4 objects)
     all_data = np.empty((1200, 64, 16, 12))

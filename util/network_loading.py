@@ -5,9 +5,10 @@ import torch.nn as nn
 from networks.rdm_network import RDM_MLP
 from networks.autoencoder import AUTOENCODER
 
-from util.data import create_eeg_data, create_rdms
+from data.rdms import create_rdms
+from data.reshaping import create_eeg_data
 
-from util.data import get_subfiles
+from util.paths import get_subfiles
 
 
 def get_last_network(network_path):
