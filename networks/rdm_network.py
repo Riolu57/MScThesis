@@ -66,6 +66,14 @@ class RDM_MLP(nn.Module):
         return create_rdms(torch.squeeze(processed_data))
 
 
+# class RDM_RNN(nn.RNN):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     def forward(self, input: Tensor, hx: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+#
+
+
 # for test
 if __name__ == "__main__":
     net = RDM_MLP(2)

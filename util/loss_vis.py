@@ -176,4 +176,4 @@ def vis_eeg(data_path: str):
 
 if __name__ == "__main__":
     common_path = "U:/Year 5/Thesis/training/models"
-    plot_loss(common_path)
+    plot_loss(common_path, normalize=True)

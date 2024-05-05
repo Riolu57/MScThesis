@@ -1,13 +1,14 @@
-from torch.nn import MSELoss
+from torch.nn import MSELoss, RNN
 
 from networks.autoencoder import AUTOENCODER
 from networks.rdm_network import RDM_MLP
 
-from training.basic_loops import train_loop, test_loop
+from training.basic_loops import train_loop, test_loop, rnn_train_loop, rnn_test_loop
 from networks.loss import fro_loss
 
 from util.data import (
     prepare_rdm_data,
+    prepare_rdm_data_rnn,
     split_data,
     AutoDataset,
     load_eeg_data,
@@ -29,8 +30,8 @@ def train_network(
     random.seed(seed)
 
     train_loader = DataLoader(datasets[0], batch_size=10, shuffle=True)
-    val_loader = DataLoader(datasets[0], batch_size=3, shuffle=True)
-    test_loader = DataLoader(datasets[0], batch_size=3, shuffle=True)
+    val_loader = DataLoader(datasets[1], batch_size=3, shuffle=True)
+    test_loader = DataLoader(datasets[2], batch_size=3, shuffle=True)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
@@ -117,3 +118,52 @@ def train_autoencoder_kin(seed, kin_path, model_path, epochs, learning_rate, alp
         learning_rate,
         alpha,
     )
+
+
+def train_rnn_rdm(seed, eeg_path, kin_path, model_path, epochs, learning_rate, alpha):
+    model = RNN(
+        input_size=16,
+        hidden_size=1,
+        num_layers=1,
+        nonlinearity="tanh",
+        bias=True,
+        batch_first=True,
+        dropout=0,
+        bidirectional=False,
+    )
+    train_data, val_data, test_data = prepare_rdm_data_rnn(eeg_path, kin_path)
+
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    train_loader = DataLoader(train_data, batch_size=10, shuffle=True)
+    val_loader = DataLoader(val_data, batch_size=3, shuffle=True)
+    test_loader = DataLoader(test_data, batch_size=3, shuffle=True)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    for epoch in range(epochs):
+        print(
+            f"======================================== CURRENT EPOCH: {epoch + 1} ========================================"
+        )
+        rnn_train_loop(
+            f"{model_path}/data.txt",
+            train_loader,
+            model,
+            MSELoss(),
+            optimizer,
+            alpha,
+        )
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "epoch": epoch,
+            },
+            f"{model_path}/epoch_{epoch}",
+        )
+        rnn_test_loop(f"{model_path}/data.txt", val_loader, model, MSELoss())
+
+
+# Create RNN that takes EEG data and then predicts Kin Data, with a hidden layer of size 1

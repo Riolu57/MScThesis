@@ -186,6 +186,20 @@ def prepare_rdm_data(eeg_data_path: str, kinematics_data_path: str):
     return train_data, val_data, test_data
 
 
+def prepare_rdm_data_rnn(eeg_data_path: str, kinematics_data_path: str):
+    full_eeg_data = load_eeg_data(eeg_data_path)
+    train_eeg_data, val_eeg_data, test_eeg_data = split_data(full_eeg_data)
+
+    full_kinematics_data = load_kinematics_data(kinematics_data_path)
+    train_kin, val_kin, test_kin = split_data(full_kinematics_data)
+
+    train_data = RNNDataset(train_eeg_data, train_kin)
+    val_data = RNNDataset(val_eeg_data, val_kin)
+    test_data = RNNDataset(test_eeg_data, test_kin)
+
+    return train_data, val_data, test_data
+
+
 def create_kin_rdms(kin_data):
     """Creates Representation Dissimilarity Maps (RDMs) based off of the passed data.
     kin_data is expected to be a list, where each element is of shape (sample_size, condtions, time-points)
@@ -250,8 +264,8 @@ class RDMDataset(Dataset):
         return create_kin_rdms(kin_data)
 
     @staticmethod
-    def process_eeg(eeg_data):
-        return create_eeg_data(eeg_data)
+    def process_eeg(eeg_data: np.array):
+        return create_eeg_data(torch.as_tensor(eeg_data))
 
 
 class AutoDataset(Dataset):
@@ -264,6 +278,46 @@ class AutoDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.data[idx], self.labels[idx]
+
+
+class RNNDataset(Dataset):
+    def __init__(self, eeg_data, kinematics_data):
+        self.labels = self.create_rdms(kinematics_data)
+        self.data = self.process_eeg(eeg_data)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.labels[idx]
+
+    @staticmethod
+    def create_rdms(kin_data):
+        """Creates Representation Dissimilarity Maps (RDMs) based off of the passed data.
+        kin_data is expected to be a list, where each element is of shape (sample_size, condtions, time-points)
+        """
+        return create_kin_rdms(kin_data)
+
+    @staticmethod
+    def process_eeg(eeg_data: np.array):
+        return create_eeg_data(torch.as_tensor(eeg_data)).transpose(2, 3)
+
+
+def rnn_reshaping(data):
+    data_copy = data[:]
+    return torch.reshape(
+        data_copy,
+        (
+            data_copy.shape[0] * data_copy.shape[1],
+            data_copy.shape[2],
+            data_copy.shape[3],
+        ),
+    )
+
+
+def rnn_unshaping(data: torch.Tensor, shape):
+    data_copy = data[:]
+    return torch.reshape(data_copy, (shape[0], shape[1], shape[2], data.shape[-1]))
 
 
 def _create_rdm(data):
