@@ -9,7 +9,7 @@ import torch
 from data.rdms import create_rdms
 from data.reshaping import rnn_reshaping, rnn_unshaping
 
-from networks import AUTOENCODER, RDM_MLP, fro_loss
+from networks import Autoencoder, RdmMlp, fro_loss
 
 
 def train_loop(
@@ -47,7 +47,7 @@ def train_loop(
             rnn_data = rnn_reshaping(X)
             states, _ = model(rnn_data)
             pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-        elif isinstance(model, (AUTOENCODER, RDM_MLP)):
+        elif isinstance(model, (Autoencoder, RdmMlp)):
             pred = model(X)
         else:
             raise NotImplemented("This type of architecture is not yet supported.")
@@ -110,7 +110,7 @@ def test_loop(
                 rnn_data = rnn_reshaping(X)
                 states, _ = model(rnn_data)
                 pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-            elif isinstance(model, (AUTOENCODER, RDM_MLP)):
+            elif isinstance(model, (Autoencoder, RdmMlp)):
                 pred = model(X)
             else:
                 raise NotImplemented("This type of architecture is not yet supported.")

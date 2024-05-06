@@ -10,7 +10,7 @@ from data.reshaping import create_eeg_data, uncreate_eeg_data
 from data.loading import load_eeg_data, split_data
 from data.datasets import RDMDataset, prepare_rdm_data
 from training.training_classic import preprocess_pca_data
-from training.training_nn import AUTOENCODER, RDM_MLP
+from training.training_nn import Autoencoder, RdmMlp
 
 
 class DataSplit(unittest.TestCase):
@@ -211,7 +211,7 @@ class AutoencoderReshaping(unittest.TestCase):
         self.data = torch.as_tensor(
             gen.random((2, 3, 4, 20, 5), dtype=DTYPE_NP), dtype=DTYPE_TORCH
         )
-        self.model = AUTOENCODER(0)
+        self.model = Autoencoder(0)
 
     def test_shaping_equivalence(self):
         self.assertTrue(
@@ -269,7 +269,7 @@ class RSAEmbeddingReshaping(unittest.TestCase):
         self.data = torch.as_tensor(
             gen.random((2 * 3, 4, 20, 5), dtype=DTYPE_NP), dtype=DTYPE_TORCH
         )
-        self.model = RDM_MLP(self.data.shape[2])
+        self.model = RdmMlp(self.data.shape[2])
 
     def test_shaping_equivalence(self):
         self.assertTrue(

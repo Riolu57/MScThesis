@@ -1,15 +1,15 @@
 import unittest
 
-from networks.rdm_network import RDM_MLP
-from networks.autoencoder import AUTOENCODER
+from networks.rdm_network import RdmMlp
+from networks.autoencoder import Autoencoder
 
 
 class AutoencoderArchitecture(unittest.TestCase):
     @classmethod
     def setUpClass(self) -> None:
         self.inp_dim = 15
-        self.rdm = RDM_MLP(self.inp_dim)
-        self.auto = AUTOENCODER(self.inp_dim)
+        self.rdm = RdmMlp(self.inp_dim)
+        self.auto = Autoencoder(self.inp_dim)
 
     def test_encoder_equivalence(self):
         for rdm_layer, auto_layer in zip(self.rdm.process, self.auto.process):

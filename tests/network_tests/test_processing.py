@@ -4,7 +4,7 @@ import torch
 
 from CONFIG import DTYPE_NP, DTYPE_TORCH, FLOAT_TOLERANCE
 
-from training.training_nn import RDM_MLP, AUTOENCODER
+from training.training_nn import RdmMlp, Autoencoder
 
 
 class BatchProcessing(unittest.TestCase):
@@ -15,8 +15,8 @@ class BatchProcessing(unittest.TestCase):
         self.data = torch.as_tensor(
             gen.random((20, 16), dtype=DTYPE_NP), dtype=DTYPE_TORCH
         )
-        self.rdm = RDM_MLP(self.data.shape[1])
-        self.auto = AUTOENCODER(self.data.shape[1])
+        self.rdm = RdmMlp(self.data.shape[1])
+        self.auto = Autoencoder(self.data.shape[1])
 
     def test_batch_processing_rdm(self):
         batch_data = self.rdm.process(self.data)

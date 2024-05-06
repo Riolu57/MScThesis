@@ -1,7 +1,12 @@
 import os
 
 
-def get_subdirs(path):
+def get_subdirs(path: str) -> list:
+    """Filters out non-subdirectories from a given path.
+
+    @param path: Path to be analyzed.
+    @return: List of subdirectories.
+    """
     dir_names = os.listdir(path)
     dir_names = [
         dir_name
@@ -11,7 +16,12 @@ def get_subdirs(path):
     return dir_names
 
 
-def get_subfiles(path):
+def get_subfiles(path: str) -> list:
+    """Filters out non-files from a given path.
+
+    @param path: Path to be analyzed.
+    @return: List of files in path.
+    """
     file_names = os.listdir(path)
     file_names = [
         file_name

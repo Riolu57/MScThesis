@@ -1,3 +1,3 @@
-from autoencoder import AUTOENCODER
-from rdm_network import RDM_MLP
+from autoencoder import Autoencoder
+from rdm_network import RdmMlp
 from loss import fro_loss

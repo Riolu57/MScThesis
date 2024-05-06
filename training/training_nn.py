@@ -5,8 +5,8 @@ from torch.utils.data import Dataset
 
 from torch.nn import MSELoss, RNN
 
-from networks.autoencoder import AUTOENCODER
-from networks.rdm_network import RDM_MLP
+from networks.autoencoder import Autoencoder
+from networks.rdm_network import RdmMlp
 
 from training.basic_loops import train_loop, test_loop
 from networks.loss import fro_loss
@@ -95,7 +95,7 @@ def train_rsa_embedding(
     @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @return: None.
     """
-    model = RDM_MLP(16)
+    model = RdmMlp(16)
     train_data, val_data, test_data = prepare_rdm_data(eeg_path, kin_path)
 
     train_network(
@@ -134,7 +134,7 @@ def train_autoencoder_eeg(
     val_data = AutoDataset(val_data)
     test_data = AutoDataset(test_data)
 
-    model = AUTOENCODER(train_data[0][0].shape[2])
+    model = Autoencoder(train_data[0][0].shape[2])
 
     print(f"Model initialized with {train_data[0][0].shape[2]} input neurons.")
 
@@ -174,7 +174,7 @@ def train_autoencoder_kin(
     val_data = AutoDataset(val_data)
     test_data = AutoDataset(test_data)
 
-    model = AUTOENCODER(train_data[0][0].shape[2])
+    model = Autoencoder(train_data[0][0].shape[2])
 
     train_network(
         model,

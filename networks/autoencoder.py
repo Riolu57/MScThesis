@@ -1,12 +1,16 @@
+from torch import nn as nn
+
+from data.rdms import create_rdms
+from networks import RdmMlp
 from util.type_hints import *
 
 import torch.nn as nn
 import torch
 
-from networks.rdm_network import RDM_MLP
+from networks.rdm_network import RdmMlp
 
 
-class AUTOENCODER(nn.Module):
+class Autoencoder(nn.Module):
     """Participants need to be dim 0, grasp phase dim 1, Conditions need to be dim 2, number of channels dim 3, data/time points dim 4"""
 
     def __init__(self, in_dim: int):
@@ -16,7 +20,7 @@ class AUTOENCODER(nn.Module):
 
         ### Compex list manipulation to create reversed copy of sequential model of rdm_network ###
         # Create RDM MLP to get architecture
-        subnetwork = RDM_MLP(self.in_dim)
+        subnetwork = RdmMlp(self.in_dim)
 
         # Get layers and copy for later modifications
         layers = subnetwork.process
@@ -83,3 +87,50 @@ class AUTOENCODER(nn.Module):
         new_data = self.reshape_data(data)
 
         return self.unshape_data(self.process(new_data), data.shape)
+
+
+class AutoEmbedder(nn.Module):
+    def __init__(self, architecture):
+        super().__init__()
+
+        subnetwork = RdmMlp(architecture.process[0].in_features)
+        encoder = []
+
+        for idx in range(len(subnetwork.process)):
+            encoder.append(architecture.process[idx])
+
+        self.process = nn.Sequential(*encoder)
+
+    def forward(self, data):
+        tensor_data = self.reshape_data(torch.as_tensor(data))
+        processed_data = self.process(tensor_data)
+        unshaped_data = torch.squeeze(self.unshape_data(processed_data, data.shape))
+        rdm_ready_data = unshaped_data.reshape(
+            unshaped_data.shape[0] * unshaped_data.shape[1],
+            unshaped_data.shape[2],
+            unshaped_data.shape[3],
+        )
+
+        return create_rdms(rdm_ready_data)
+
+    @staticmethod
+    def reshape_data(data):
+        """Assumes that the data is 5 dimensional"""
+        data_copy = data[:]
+        data_copy = data_copy.transpose(3, 4)
+        data_copy = data_copy.reshape(
+            data_copy.shape[0]
+            * data_copy.shape[1]
+            * data_copy.shape[2]
+            * data_copy.shape[3],
+            data_copy.shape[4],
+        )
+        return data_copy
+
+    @staticmethod
+    def unshape_data(data, shape):
+        data_copy = data[:]
+        data_copy = data_copy.reshape(
+            shape[0], shape[1], shape[2], shape[4], data.shape[1]
+        )
+        return data_copy.transpose(3, 4)

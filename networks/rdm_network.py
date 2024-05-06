@@ -8,7 +8,7 @@ import numpy as np
 from data.rdms import create_rdms
 
 
-class RDM_MLP(nn.Module):
+class RdmMlp(nn.Module):
     """Conditions need to be dim 1, number of channels dim 2, data/time points dim 3
     Example array with 3 conditions, 2 channels and 4 points per channel:
     np.array(
