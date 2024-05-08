@@ -1,7 +1,7 @@
 from torch import nn as nn
 
 from data.rdms import create_rdms
-from networks import RdmMlp
+from networks.rdm_network import RdmMlp
 from util.type_hints import *
 
 import torch.nn as nn

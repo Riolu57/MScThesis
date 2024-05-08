@@ -9,10 +9,13 @@ import torch
 from data.rdms import create_rdms
 from data.reshaping import rnn_reshaping, rnn_unshaping
 
-from networks import Autoencoder, RdmMlp, fro_loss
+from networks.rdm_network import RdmMlp
+from networks.autoencoder import Autoencoder
+from networks.loss import fro_loss
+from networks.auto_rnn import AutoRnn
 
 
-def train_loop(
+def nn_train_loop(
     path: str,
     dataloader: DataLoader,
     model: torch.nn.Module,
@@ -47,7 +50,7 @@ def train_loop(
             rnn_data = rnn_reshaping(X)
             states, _ = model(rnn_data)
             pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-        elif isinstance(model, (Autoencoder, RdmMlp)):
+        elif isinstance(model, (Autoencoder, RdmMlp, AutoRnn)):
             pred = model(X)
         else:
             raise NotImplemented("This type of architecture is not yet supported.")
@@ -84,7 +87,7 @@ def train_loop(
             f.write(f"T:{adjusted_model_loss}\nR:{adjusted_reg_loss}\n")
 
 
-def test_loop(
+def nn_test_loop(
     path: str,
     dataloader: DataLoader,
     model: torch.nn.Module,
@@ -110,7 +113,7 @@ def test_loop(
                 rnn_data = rnn_reshaping(X)
                 states, _ = model(rnn_data)
                 pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-            elif isinstance(model, (Autoencoder, RdmMlp)):
+            elif isinstance(model, (Autoencoder, RdmMlp, AutoRnn)):
                 pred = model(X)
             else:
                 raise NotImplemented("This type of architecture is not yet supported.")

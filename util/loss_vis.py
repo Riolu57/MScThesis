@@ -10,8 +10,12 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 from util.paths import get_subdirs
 from data.rdms import create_rdms
-from data.reshaping import create_eeg_data
-from util.network_loading import get_auto_inference_network, get_rdm_inference_network
+from data.reshaping import create_eeg_data, rnn_reshaping, rnn_unshaping
+from util.network_loading import (
+    get_auto_inference_network,
+    get_rdm_inference_network,
+    get_rnn_rdm_network,
+)
 
 
 def normalize_list(val_list: Iterable, normalization_constant: float) -> list:
@@ -75,7 +79,7 @@ def plot_loss(common_path: str, normalize: bool = True) -> None:
 
 
 def plot_rdms(
-    eeg_rsa: Iterable[NDArray, ...], kin_rsa: Iterable[NDArray], names: Iterable[str]
+    eeg_rsa: Iterable[NDArray], kin_rsa: Iterable[NDArray], names: Iterable[str]
 ) -> None:
     """Creates a 6 x len(eeg_rsa) plot depicting the RDMs of the first participant over all grasping phases.
 
@@ -206,6 +210,20 @@ def compute_auto_rdms(network_path: str, data: DataConstruct) -> torch.Tensor:
     """
     network = get_auto_inference_network(network_path, data.shape[3])
     return _compute_network_rdms(network, data)
+
+
+def compute_rnn_rdms(network_path: str, data: DataConstruct) -> torch.Tensor:
+    """Computes Autoencoder Embedder's RDMs of passed data.
+
+    @param network_path: Path to the folder of saved networks.
+    @param data: Data of which RDMs should created.
+    @return: 3D tensor of shape [Participants + Grasp phase x Conditions x Conditions)
+    """
+    net = get_rnn_rdm_network(network_path, data.shape[-2])
+    middle_data = create_eeg_data(torch.as_tensor(data)).transpose(2, 3)
+    rnn_data = rnn_reshaping(middle_data)
+    states, _ = net(rnn_data)
+    return create_rdms(torch.squeeze(rnn_unshaping(states, middle_data.shape)))
 
 
 def _compute_network_rdms(
