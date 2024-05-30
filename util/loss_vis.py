@@ -10,7 +10,7 @@ from mpl_toolkits.axes_grid1 import ImageGrid
 
 from util.paths import get_subdirs
 from data.rdms import create_rdms
-from data.reshaping import create_eeg_data, rnn_reshaping, rnn_unshaping
+from data.reshaping import rnn_reshaping, rnn_unshaping
 from util.network_loading import (
     get_auto_inference_network,
     get_rdm_inference_network,
@@ -145,6 +145,8 @@ def vis_eeg(data_path: str):
 
     data = h5py.File(data_path)
 
+    # TODO: Add proper axis titles with units and plot title
+
     # Needed order: ["LC", "SC", "LS", "SS"]
     for object_idx, object_type in enumerate(["LC", "SC", "LS", "SS"]):
         for grasp_idx, grasp_type in enumerate(["power", "precision2", "precision5"]):
@@ -197,7 +199,7 @@ def compute_rdm_rdms(network_path: str, data: DataConstruct) -> torch.Tensor:
     @return: 3D tensor of shape [Participants + Grasp phase x Conditions x Conditions)
     """
     network = get_rdm_inference_network(network_path, data.shape[3])
-    new_data = create_eeg_data(torch.as_tensor(data))
+    new_data = torch.as_tensor(data)
     return _compute_network_rdms(network, new_data)
 
 
@@ -220,7 +222,7 @@ def compute_rnn_rdms(network_path: str, data: DataConstruct) -> torch.Tensor:
     @return: 3D tensor of shape [Participants + Grasp phase x Conditions x Conditions)
     """
     net = get_rnn_rdm_network(network_path, data.shape[-2])
-    middle_data = create_eeg_data(torch.as_tensor(data)).transpose(2, 3)
+    middle_data = torch.as_tensor(data).transpose(3, 4)
     rnn_data = rnn_reshaping(middle_data)
     states, _ = net(rnn_data)
     return create_rdms(torch.squeeze(rnn_unshaping(states, middle_data.shape)))

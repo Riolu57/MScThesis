@@ -6,13 +6,17 @@ from torch.utils.data import DataLoader
 from sklearn.base import BaseEstimator
 
 import torch
-from data.rdms import create_rdms
-from data.reshaping import rnn_reshaping, rnn_unshaping
+from data.rdms import create_5D_rdms
+from data.reshaping import rnn_reshaping, rnn_unshaping, cnn_unshaping
+
+from networks.loss import fro_loss
+from networks.util import add_noise, get_rdms
 
 from networks.rdm_network import RdmMlp
 from networks.autoencoder import Autoencoder
-from networks.loss import fro_loss
-from networks.auto_rnn import AutoRnn
+from networks.rnn_emb_kin import RnnEmbKin
+from networks.mlp_emb_kin import MlpEmbKin
+from networks.cnn_emb_kin import CnnEmbKin
 
 
 def nn_train_loop(
@@ -46,16 +50,28 @@ def nn_train_loop(
         optimizer.zero_grad()
 
         # Compute prediction and loss based on architecture
-        if isinstance(model, torch.nn.RNN):
-            rnn_data = rnn_reshaping(X)
-            states, _ = model(rnn_data)
-            pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-        elif isinstance(model, (Autoencoder, RdmMlp, AutoRnn)):
+        if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
+            norm_param = y[0].shape[0]
+
+            rdms, outputs = get_rdms(X, model)
+            while torch.isnan(rdms).any():
+                add_noise(model)
+                rdms, outputs = get_rdms(X, model)
+
+            target_rmds = y[0][:]
+            target_rmds = target_rmds.reshape(
+                target_rmds.shape[0] * target_rmds.shape[1],
+                target_rmds.shape[2],
+                target_rmds.shape[3],
+            )
+
+            loss = loss_fn((rdms, outputs), (target_rmds, y[1]))
+        elif isinstance(model, Autoencoder):
+            norm_param = y.shape[0]
             pred = model(X)
+            loss = loss_fn(pred, y)
         else:
             raise NotImplemented("This type of architecture is not yet supported.")
-
-        loss = loss_fn(pred, y)
 
         # Compute regularization loss
         reg_loss = 0
@@ -63,8 +79,8 @@ def nn_train_loop(
             reg_loss += torch.sum(param**2)
 
         # Normalize losses per number of datapoints
-        full_model_loss += loss.item() / y.shape[0]
-        full_reg_loss += reg_loss / y.shape[0]
+        full_model_loss += loss.item() / norm_param
+        full_reg_loss += reg_loss / norm_param
 
         # Unify regularization and model loss
         loss += alpha * reg_loss
@@ -103,29 +119,42 @@ def nn_test_loop(
     # Set model to evaluation/inference mode
     model.eval()
     size = len(dataloader.dataset)
-    test_loss, correct = 0, 0
+    loss, correct = 0, 0
 
     # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
     # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
     with torch.no_grad():
         for X, y in dataloader:
-            if isinstance(model, torch.nn.RNN):
-                rnn_data = rnn_reshaping(X)
-                states, _ = model(rnn_data)
-                pred = create_rdms(torch.squeeze(rnn_unshaping(states, X.shape)))
-            elif isinstance(model, (Autoencoder, RdmMlp, AutoRnn)):
+            if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
+                embeddings, outputs = model(X)
+                if isinstance(model, CnnEmbKin):
+                    rdms = create_5D_rdms(cnn_unshaping(embeddings, X.shape))
+                else:
+                    rdms = create_5D_rdms(rnn_unshaping(embeddings, X.shape))
+
+                target_rmds = y[0][:]
+                target_rmds = target_rmds.reshape(
+                    target_rmds.shape[0] * target_rmds.shape[1],
+                    target_rmds.shape[2],
+                    target_rmds.shape[3],
+                )
+
+                loss = loss_fn((rdms, outputs), (target_rmds, y[1]))
+            elif isinstance(model, Autoencoder):
                 pred = model(X)
+                loss = loss_fn(pred, y)
             else:
                 raise NotImplemented("This type of architecture is not yet supported.")
-            test_loss += loss_fn(pred, y)
 
     # Write performance to file
     with open(path, "a+") as f:
-        f.write(f"V:{test_loss / size}\n")
+        f.write(f"V:{loss / size}\n")
 
     # Adjust loss to be mean loss
-    test_loss /= size
-    print(f"Eval loss: {test_loss:>8f}")
+    loss /= size
+    print(f"Eval loss: {loss:>8f}")
+
+    return loss
 
 
 def classic_training_loop(

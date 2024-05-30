@@ -13,13 +13,7 @@ def get_best_network(network_path: str) -> str:
     @param network_path: Folder path containing all saved network states.
     @return: Full path to the last trained network.
     """
-    sub_files = get_subfiles(network_path)
-    with open(os.path.join(network_path, sub_files[0])) as f:
-        val_loss = [float(t[2:]) for t in f.readlines() if t[0] == "V"]
-        epoch = val_loss.index(min(val_loss))
-
-    network_name = f"epoch_{epoch}"
-    return os.path.join(network_path, network_name)
+    return os.path.join(network_path, "lowest_val_loss")
 
 
 def get_auto_inference_network(network_path: str, input_neurons: int) -> AutoEmbedder:

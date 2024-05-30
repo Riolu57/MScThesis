@@ -1,29 +1,21 @@
 import torch
-from numpy.typing import NDArray
+from util.type_hints import *
 
 
-def create_kin_rdms(kin_data: NDArray) -> torch.Tensor:
+def create_5D_rdms(data: DataConstruct) -> torch.Tensor:
     """Creates Representation Dissimilarity Maps (RDMs) based off of the passed data.
-    @param kin_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
+    @param data: Data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
     @return: 3D Tensor of RDMs: (Index x Condition x Condition)
     """
-    labels = torch.empty(0)
-
-    for participant in kin_data:
-        for grasp_phase in participant:
-            # Concatenate all channel data to create data of shape (num_objects*num_grasps, num_channels*num_time_steps)
-            rdm_data = grasp_phase.reshape(
-                (grasp_phase.shape[0], grasp_phase.shape[1] * grasp_phase.shape[2])
-            )
-
-            cur_rdm = 1 - torch.corrcoef(torch.as_tensor(rdm_data))
-            cur_rdm = cur_rdm.reshape(1, kin_data.shape[2], kin_data.shape[2])
-            labels = torch.concatenate((labels, cur_rdm), 0)
-
-    return labels
+    data_copy = torch.as_tensor(data[:])
+    # Concatenate channels and combine participants and grasp phases
+    data_copy = data_copy.reshape(
+        data.shape[0] * data.shape[1], data.shape[2], data.shape[3] * data.shape[4]
+    )
+    return create_rdms(data_copy)
 
 
-def create_rdms(data):
+def create_rdms(data: torch.Tensor) -> torch.Tensor:
     """Creates correlation based RDMs based off of the given data.
 
     @param data: A numpy array containing the to-be-processed data, needs to be of shape (Z x X x Y)
@@ -41,7 +33,7 @@ def create_rdms(data):
     return accumulate
 
 
-def _create_rdm(data):
+def _create_rdm(data: torch.Tensor) -> torch.Tensor:
     """Creates a correlation based RDM based off of the given data.
 
     @param data: A numpy array containing the to-be-processed data, needs to be of shape (X x Y)

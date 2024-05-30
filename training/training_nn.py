@@ -1,4 +1,6 @@
 # TypeHint only imports
+import os.path
+
 from util.type_hints import *
 from typing import Callable, Iterable
 from torch.utils.data import Dataset
@@ -7,17 +9,16 @@ from torch.nn import MSELoss, RNN
 
 from networks.autoencoder import Autoencoder
 from networks.rdm_network import RdmMlp
-from networks.auto_rnn import AutoRnn
 
 from training.basic_loops import nn_train_loop, nn_test_loop
-from networks.loss import fro_loss
+from networks.loss import fro_loss, param_wrapper
 
 from data.loading import load_kinematics_data, load_eeg_data, split_data
 from data.datasets import (
     AutoDataset,
     prepare_rdm_data,
-    prepare_rdm_data_rnn,
     prepare_kin_eeg_data_rnn,
+    prepare_eeg_emb_kin_data,
 )
 
 from torch.utils.data import DataLoader
@@ -48,6 +49,14 @@ def train_network(
     @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @return: None.
     """
+    # Make sure that files and folder exist properly
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+        open(os.path.join(model_path, "data.txt"), "a").close()
+
+    elif not os.path.exists(os.path.join(model_path, "data.txt")):
+        open(os.path.join(model_path, "data.txt"), "a").close()
+
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -57,6 +66,8 @@ def train_network(
     test_loader = DataLoader(datasets[2], batch_size=3, shuffle=True)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    lowest_loss = np.infty
 
     for epoch in range(epochs):
         print(
@@ -70,15 +81,19 @@ def train_network(
             optimizer,
             alpha,
         )
-        torch.save(
-            {
-                "model_state_dict": model.state_dict(),
-                "optimizer_state_dict": optimizer.state_dict(),
-                "epoch": epoch,
-            },
-            f"{model_path}/epoch_{epoch}",
-        )
-        nn_test_loop(f"{model_path}/data.txt", val_loader, model, loss)
+
+        test_loss = nn_test_loop(f"{model_path}/data.txt", val_loader, model, loss)
+
+        if test_loss < lowest_loss:
+            torch.save(
+                {
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "epoch": epoch,
+                },
+                f"{model_path}/lowest_val_loss",
+            )
+            lowest_loss = test_loss
 
 
 def train_rsa_embedding(
@@ -142,8 +157,6 @@ def train_autoencoder_eeg(
 
     model = Autoencoder(train_data[0][0].shape[2])
 
-    print(f"Model initialized with {train_data[0][0].shape[2]} input neurons.")
-
     train_network(
         model,
         MSELoss(),
@@ -194,81 +207,42 @@ def train_autoencoder_kin(
     )
 
 
-def train_rnn_rdm(
+def train_eeg_emb_kin(
     seed: int,
+    model: torch.nn.Module,
     eeg_path: str,
     kin_path: str,
     model_path: str,
     epochs: int,
     learning_rate: float,
     alpha: float,
+    beta: float,
+    gamma: float,
 ) -> None:
     """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
 
     @param seed: Seed for the experiment.
+    @param model: The model which will be trained.
     @param eeg_path: Path where EEG data is saved.
     @param kin_path: Path where Kinematics data is saved.
     @param model_path: Path where the model should be saved.
     @param epochs: For how many epochs the model should be trained for.
     @param learning_rate: Learning rate of ADAM.
-    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
-    @return: None.
-    """
-    model = RNN(
-        input_size=16,
-        hidden_size=1,
-        num_layers=1,
-        nonlinearity="tanh",
-        bias=True,
-        batch_first=True,
-        dropout=0,
-        bidirectional=False,
-    )
-
-    train_network(
-        model,
-        MSELoss(),
-        prepare_rdm_data_rnn(eeg_path, kin_path),
-        seed,
-        model_path,
-        epochs,
-        learning_rate,
-        alpha,
-    )
-
-
-def train_eeg_kin_rnn(
-    seed: int,
-    eeg_path: str,
-    kin_path: str,
-    model_path: str,
-    epochs: int,
-    learning_rate: float,
-    alpha: float,
-) -> None:
-    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
-
-    @param seed: Seed for the experiment.
-    @param eeg_path: Path where EEG data is saved.
-    @param kin_path: Path where Kinematics data is saved.
-    @param model_path: Path where the model should be saved.
-    @param epochs: For how many epochs the model should be trained for.
-    @param learning_rate: Learning rate of ADAM.
-    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param alpha: Fro loss between embedding and Kin RDMs. [-\inf, \inf].
+    @param beta: MSE loss between output and Kin data. [-\inf, \inf].
+    @param gamma: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @return: None.
     """
 
-    data = prepare_kin_eeg_data_rnn(eeg_path, kin_path)
-
-    model = AutoRnn(data[0][0][0].shape[2], data[0][0][1].shape[2])
+    data = prepare_eeg_emb_kin_data(eeg_path, kin_path)
 
     train_network(
         model,
-        MSELoss(),
+        param_wrapper(alpha, beta),
         data,
         seed,
         model_path,
         epochs,
         learning_rate,
-        alpha,
+        gamma,
     )

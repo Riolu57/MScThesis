@@ -8,24 +8,14 @@ import torch.nn as nn
 from data.rdms import create_5D_rdms
 
 
-class RdmMlp(nn.Module):
-    """Conditions need to be dim 1, number of channels dim 2, data/time points dim 3
-    Example array with 3 conditions, 2 channels and 4 points per channel:
-    np.array(
-        [
-            [[1, 2, 3, 4], [1, 2, 3, 4]],
-            [[2, 3, 4, 5], [2, 3, 4, 5]],
-            [[0, 1, 2, 3], [0, 1, 2, 3]]
-        ],
-        dtype="float32")
-    """
-
-    def __init__(self, in_dim: int):
+class MlpEmbKin(nn.Module):
+    def __init__(self, in_dim: int, out_dim: int):
         super().__init__()
 
         self.in_dim = in_dim
+        self.out_dim = out_dim
 
-        self.process = nn.Sequential(
+        self.encoder = nn.Sequential(
             nn.Linear(self.in_dim, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
             nn.Linear(20, 20, dtype=DTYPE_TORCH),
@@ -35,6 +25,19 @@ class RdmMlp(nn.Module):
             nn.Linear(20, 10, dtype=DTYPE_TORCH),
             nn.ReLU(),
             nn.Linear(10, 1, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+        )
+
+        self.decoder = nn.Sequential(
+            nn.Linear(1, 10, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+            nn.Linear(10, 20, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+            nn.Linear(20, self.out_dim, dtype=DTYPE_TORCH),
             nn.ReLU(),
         )
 
@@ -68,17 +71,14 @@ class RdmMlp(nn.Module):
         )
         return data_copy.transpose(3, 4)
 
-    def forward(self, data):
+    def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute an RDM based on 1 - R^2 of the passed signals.
 
-        @param data: A tensor of shape (classes/conditions, inputs, time)
-        @return: 1 - Corr(network(class_1), network(class_2), ..., network(class_N))
+        @param data: A tensor of shape (participants x grasp phase x condition x inputs x time)
+        @return: Embeddings and outputs.
         """
         reshaped_data = self.reshape_data(data)
-        processed_data = self.unshape_data(self.process(reshaped_data), data.shape)
-        rdms = create_5D_rdms(processed_data)
+        embeddings = self.encoder(reshaped_data)
+        outputs = self.unshape_data(self.decoder(embeddings), data.shape)
 
-        if (processed_data == 0).all():
-            return torch.rand(*rdms.shape)
-
-        return rdms
+        return embeddings, outputs

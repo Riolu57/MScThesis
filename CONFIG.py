@@ -11,4 +11,3 @@ DTYPE_NP = np.float32
 DTYPE_TORCH = torch.float32
 EEG_CHANNELS = [8, 45, 9, 12, 13, 14, 51, 18, 52, 19, 53, 23, 56, 24, 57, 25]
 FLOAT_TOLERANCE = 0.00001
-#

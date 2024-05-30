@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch
 
 
-class AutoRnn(nn.Module):
+class RnnEmbKin(nn.Module):
     def __init__(self, in_dim: int, out_dim: int):
         super().__init__()
 
@@ -67,7 +67,7 @@ class AutoRnn(nn.Module):
         )
         return data_copy.transpose(3, 4)
 
-    def forward(self, data: torch.Tensor) -> torch.Tensor:
+    def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """Computes the model output given some data.
         @param data: Input data. Expected to be 5D, where dim 3 are the input channels.
         @return: Model output of nearly the same shape as input.
@@ -76,4 +76,4 @@ class AutoRnn(nn.Module):
         rnn_states, _ = self.rnn(new_data)
         linear_data = self.reshape_data(rnn_states)
 
-        return self.unshape_data(self.out_layer(linear_data), data.shape)
+        return rnn_states, self.unshape_data(self.out_layer(linear_data), data.shape)
