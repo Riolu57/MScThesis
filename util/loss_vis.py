@@ -154,6 +154,7 @@ def vis_eeg(data_path: str):
                 data.get(f"mean_MRCP_{object_type}_{grasp_type}"), order="F"
             )
 
+
     # SPLIT SIGNALS INTO EACH PART AS NECESSARY:
     #   - 4 Phases
     #       - The intervals are: [0:199]; [200:599]; [600:999]; [1000:1200]
