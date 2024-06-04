@@ -1,10 +1,10 @@
 import numpy as np
 import torch
 
-SEED = 12345
-EEG_DATA_PATH = "U:/Year 5/Thesis/training/data/eeg/MRCP_data_av_conditions.mat"
-KIN_DATA_PATH = "U:/Year 5/Thesis/training/data/kin"
-EPOCHS = 5000
+SEED = 123456
+EEG_DATA_PATH = "./training/data/eeg/MRCP_data_av_conditions.mat"
+KIN_DATA_PATH = "./training/data/kin"
+EPOCHS = 500
 LEARNING_RATE = 1e-4
 ALPHA = 1
 DTYPE_NP = np.float32

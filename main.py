@@ -38,105 +38,62 @@ def train_models(seed, eeg_path, kin_path, epochs, learning_rate, gamma):
 
     torch.autograd.set_detect_anomaly(True)
 
-    kin_auto_path = "./training/models/kin_auto/001"
-    eeg_auto_path = "./training/models/eeg_auto/001"
-    mlp_emb_kin_path = "./training/models/mlp_emb_kin/001"
-    rnn_emb_kin_path = "./training/models/rnn_emb_kin/001"
-    cnn_emb_kin_path = "./training/models/cnn_emb_kin/001"
+    kin_auto_path = "./models/kin_auto/001"
+    eeg_auto_path = "./models/eeg_auto/001"
+    mlp_emb_kin_path = "./models/mlp_emb_kin/001"
+    rnn_emb_kin_path = "./models/rnn_emb_kin/001"
+    cnn_emb_kin_path = "./models/cnn_emb_kin/001"
 
     for new_seed in gen.integers(0, int("9" * (len(str(seed)))), 5):
-        for alpha in range(-5, 16, 1):
-            for beta in range(-5, 16, 1):
-                if alpha <= 0 and beta <= 0:
-                    continue
+        for alpha in range(0, 11, 2):
 
-                # This was being trained when stopped.
+            new_seed = int(new_seed)
+
+            try:
+
                 train_eeg_emb_kin(
                     new_seed,
                     MlpEmbKin(16, 19),
                     eeg_path,
                     kin_path,
-                    f"{mlp_emb_kin_path}/a_{alpha}_b_{beta}/{new_seed}",
+                    f"{mlp_emb_kin_path}/a_{alpha}/{new_seed}",
                     epochs,
                     learning_rate,
                     alpha / 10,
-                    beta / 10,
                     gamma,
                 )
 
-                train_eeg_emb_kin(
-                    new_seed,
-                    RnnEmbKin(16, 19),
-                    eeg_path,
-                    kin_path,
-                    f"{rnn_emb_kin_path}/a_{alpha}_b_{beta}/{new_seed}",
-                    epochs,
-                    learning_rate,
-                    alpha / 10,
-                    beta / 10,
-                    gamma,
-                )
+            except RuntimeError:
+                with open(f"{mlp_emb_kin_path}/a_{alpha}/{new_seed}/data.txt", "a+") as f:
+                    f.write("COLLAPSED")
 
-                train_eeg_emb_kin(
-                    new_seed,
-                    CnnEmbKin(16, 19),
-                    eeg_path,
-                    kin_path,
-                    f"{cnn_emb_kin_path}/a_{alpha}_b_{beta}/{new_seed}",
-                    epochs,
-                    learning_rate,
-                    alpha / 10,
-                    beta / 10,
-                    gamma,
-                )
+                continue
 
-        # train_autoencoder_kin(
-        #     new_seed,
-        #     kin_path,
-        #     os.path.join(kin_auto_path, f"{new_seed}"),
-        #     epochs,
-        #     learning_rate,
-        #     alpha,
-        # )
-        #
-        # train_autoencoder_eeg(
-        #     new_seed,
-        #     eeg_path,
-        #     os.path.join(eeg_auto_path, f"{new_seed}"),
-        #     epochs,
-        #     learning_rate,
-        #     alpha,
-        # )
-        #
-        # train_rsa_embedding(
-        #     new_seed,
-        #     eeg_path,
-        #     kin_path,
-        #     os.path.join(rsa_path, f"{new_seed}"),
-        #     epochs,
-        #     learning_rate,
-        #     alpha,
-        # )
-        #
-        # train_rnn_rdm(
-        #     new_seed,
-        #     eeg_path,
-        #     kin_path,
-        #     os.path.join(rnn_rdm_path, f"{new_seed}"),
-        #     epochs,
-        #     learning_rate,
-        #     alpha,
-        # )
-        #
-        # train_eeg_kin_rnn(
-        #     new_seed,
-        #     eeg_path,
-        #     kin_path,
-        #     os.path.join(rnn_auto_path, f"{new_seed}"),
-        #     epochs,
-        #     learning_rate,
-        #     alpha,
-        # )
+
+
+            # train_eeg_emb_kin(
+            #     new_seed,
+            #     RnnEmbKin(16, 19),
+            #     eeg_path,
+            #     kin_path,
+            #     f"{rnn_emb_kin_path}/a_{alpha}/{new_seed}",
+            #     epochs,
+            #     learning_rate,
+            #     alpha / 10,
+            #     gamma,
+            # )
+
+            # train_eeg_emb_kin(
+            #     new_seed,
+            #     CnnEmbKin(16, 19),
+            #     eeg_path,
+            #     kin_path,
+            #     f"{cnn_emb_kin_path}/a_{alpha}/{new_seed}",
+            #     epochs,
+            #     learning_rate,
+            #     alpha / 10,
+            #     gamma,
+            # )
 
 
 def plot_results(eeg_path, kin_path):

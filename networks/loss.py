@@ -10,7 +10,7 @@ def fro_loss(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return torch.sum((output - target).flatten() ** 2)
 
 
-def param_wrapper(alpha: float, beta: float):
+def param_wrapper(alpha: float):
     def mixed_loss(output: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """Computes the squared sum of differences between embeddings and MSE between outputs.
         @param output: A network's embeddings and outputs.
@@ -19,6 +19,6 @@ def param_wrapper(alpha: float, beta: float):
         """
         return alpha * torch.sum(
             (output[0] - target[0]).flatten() ** 2
-        ) + beta * torch.nn.MSELoss()(output[1], target[1])
+        ) + (1 - alpha) * torch.nn.MSELoss()(output[1], target[2]) + torch.nn.KLDivLoss()(output[0].log(), target[1])
 
     return mixed_loss

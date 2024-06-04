@@ -72,21 +72,23 @@ class AutoDataset(Dataset):
 
 
 class RDMKinDataset(Dataset):
-    def __init__(self, eeg_data: NDArray, kin_data: NDArray):
+    def __init__(self, eeg_data: NDArray, kin_data: NDArray, generator: torch.Generator):
         """Creates a dataset with EEG data of 4 dimensions (Participants x Conditions x Input channels x Time steps) as input, and kinematics RDMs as targets.
 
         @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
         @param kinematics_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
+        @param generator: Torch pseudorandom number generator used for sampling.
         """
         self.rdms = self.create_rdms(kin_data)
         self.data = self.copy_to_tensor(eeg_data)
         self.kin = self.copy_to_tensor(kin_data)
+        self.norm_dist = torch.normal(torch.ones_like(self.rdms)*torch.mean(self.rdms), torch.ones_like(self.rdms)*torch.std(self.rdms), generator=generator)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx], (self.rdms[idx], self.kin[idx])
+        return self.data[idx], (self.rdms[idx], self.norm_dist[idx], self.kin[idx])
 
     @staticmethod
     def create_rdms(kin_data: NDArray) -> torch.Tensor:
@@ -188,13 +190,16 @@ def prepare_kin_eeg_data_rnn(
 
 
 def prepare_eeg_emb_kin_data(
-    eeg_data_path: str, kin_data_path: str
+    eeg_data_path: str, kin_data_path: str, seed: int
 ) -> Tuple[RDMKinDataset, RDMKinDataset, RDMKinDataset]:
     """Creates a dataset of training, validation and testing data to train for EEG -> Kinematics predictions and train
         the createed embeddings using RSA.
 
     @param eeg_data_path: Path to the EEG data.
     @param kinematics_data_path: Path to the kinematics data.
+    @param seed: Seed for torch generator for sampling stability.
     @return: Tuple containing training, validation and testing datasets.
     """
-    return _prepare_rdm_datasets(eeg_data_path, kin_data_path, RDMKinDataset)
+    gen = torch.Generator()
+    gen.manual_seed(seed)
+    return _prepare_rdm_datasets(eeg_data_path, kin_data_path, RDMKinDataset, gen)

@@ -216,7 +216,6 @@ def train_eeg_emb_kin(
     epochs: int,
     learning_rate: float,
     alpha: float,
-    beta: float,
     gamma: float,
 ) -> None:
     """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
@@ -228,17 +227,16 @@ def train_eeg_emb_kin(
     @param model_path: Path where the model should be saved.
     @param epochs: For how many epochs the model should be trained for.
     @param learning_rate: Learning rate of ADAM.
-    @param alpha: Fro loss between embedding and Kin RDMs. [-\inf, \inf].
-    @param beta: MSE loss between output and Kin data. [-\inf, \inf].
+    @param alpha: Fro loss between embedding and Kin RDMs. [0, 1]. Also regulates MSE loss between prediction and kin (1 - alpha).
     @param gamma: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @return: None.
     """
 
-    data = prepare_eeg_emb_kin_data(eeg_path, kin_path)
+    data = prepare_eeg_emb_kin_data(eeg_path, kin_path, seed)
 
     train_network(
         model,
-        param_wrapper(alpha, beta),
+        param_wrapper(alpha),
         data,
         seed,
         model_path,
