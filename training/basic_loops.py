@@ -10,9 +10,8 @@ from data.rdms import create_5D_rdms
 from data.reshaping import rnn_reshaping, rnn_unshaping, cnn_unshaping
 
 from networks.loss import fro_loss
-from networks.util import add_noise, get_rdms
+from networks.util import get_rdms
 
-from networks.rdm_network import RdmMlp
 from networks.autoencoder import Autoencoder
 from networks.rnn_emb_kin import RnnEmbKin
 from networks.mlp_emb_kin import MlpEmbKin
@@ -53,10 +52,7 @@ def nn_train_loop(
         if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
             norm_param = y[0].shape[0]
 
-            rdms, outputs = get_rdms(X, model)
-            #while torch.isnan(rdms).any():
-            #    add_noise(model)
-            #    rdms, outputs = get_rdms(X, model)
+            mean, var, rdms, outputs = get_rdms(X, model)
 
             target_rdms = y[0][:]
             target_rdms = target_rdms.reshape(
@@ -65,14 +61,7 @@ def nn_train_loop(
                 target_rdms.shape[3],
             )
 
-            target_norm = y[1][:]
-            target_norm = target_norm.reshape(
-                target_norm.shape[0] * target_norm.shape[1],
-                target_norm.shape[2],
-                target_norm.shape[3],
-            )
-
-            loss = loss_fn((rdms, outputs), (target_rdms, target_norm, y[2]))
+            loss = loss_fn(mean, var, rdms, outputs, target_rdms, y[1])
         elif isinstance(model, Autoencoder):
             norm_param = y.shape[0]
             pred = model(X)
@@ -133,20 +122,16 @@ def nn_test_loop(
     with torch.no_grad():
         for X, y in dataloader:
             if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
-                embeddings, outputs = model(X)
-                if isinstance(model, CnnEmbKin):
-                    rdms = create_5D_rdms(cnn_unshaping(embeddings, X.shape))
-                else:
-                    rdms = create_5D_rdms(rnn_unshaping(embeddings, X.shape))
+                mean, var, rdms, outputs = get_rdms(X, model)
 
-                target_rmds = y[0][:]
-                target_rmds = target_rmds.reshape(
-                    target_rmds.shape[0] * target_rmds.shape[1],
-                    target_rmds.shape[2],
-                    target_rmds.shape[3],
+                target_rdms = y[0][:]
+                target_rdms = target_rdms.reshape(
+                    target_rdms.shape[0] * target_rdms.shape[1],
+                    target_rdms.shape[2],
+                    target_rdms.shape[3],
                 )
 
-                loss = loss_fn((rdms, outputs), (target_rmds, y[1]))
+                loss = loss_fn(mean, var, rdms, outputs, target_rdms, y[1])
             elif isinstance(model, Autoencoder):
                 pred = model(X)
                 loss = loss_fn(pred, y)

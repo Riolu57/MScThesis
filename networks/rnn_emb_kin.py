@@ -1,5 +1,7 @@
 from util.type_hints import *
 
+from CONFIG import DTYPE_TORCH
+
 import torch.nn as nn
 import torch
 
@@ -22,6 +24,14 @@ class RnnEmbKin(nn.Module):
             batch_first=True,
             dropout=0,
             bidirectional=False,
+        )
+
+        self.mean_head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size, dtype=DTYPE_TORCH),
+        )
+
+        self.var_head = nn.Sequential(
+            nn.Linear(hidden_size, hidden_size, dtype=DTYPE_TORCH),
         )
 
         self.out_layer = nn.Sequential(nn.Linear(hidden_size, self.out_dim), nn.ReLU())
@@ -67,13 +77,28 @@ class RnnEmbKin(nn.Module):
         )
         return data_copy.transpose(3, 4)
 
-    def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, data: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Computes the model output given some data.
         @param data: Input data. Expected to be 5D, where dim 3 are the input channels.
         @return: Model output of nearly the same shape as input.
         """
+
+        def reparameterization(mean, var):
+            epsilon = torch.randn_like(var)
+            z = mean + var * epsilon
+            return z
+
         new_data = self.preshape_data(data)
         rnn_states, _ = self.rnn(new_data)
         linear_data = self.reshape_data(rnn_states)
+        mean, var = self.mean_head(linear_data), self.var_head(linear_data)
+        reparams = reparameterization(mean, var)
 
-        return rnn_states, self.unshape_data(self.out_layer(linear_data), data.shape)
+        return (
+            mean,
+            var,
+            reparams,
+            self.unshape_data(self.out_layer(reparams), data.shape),
+        )

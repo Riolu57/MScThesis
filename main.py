@@ -5,12 +5,7 @@ import numpy as np
 import random
 
 from CONFIG import SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA
-from training.training_nn import (
-    train_autoencoder_eeg,
-    train_autoencoder_kin,
-    train_rsa_embedding,
-    train_eeg_emb_kin,
-)
+from training.training_nn import train_eeg_emb_kin
 
 from training.training_classic import ana_pca, ana_ica
 
@@ -50,7 +45,6 @@ def train_models(seed, eeg_path, kin_path, epochs, learning_rate, gamma):
             new_seed = int(new_seed)
 
             try:
-
                 train_eeg_emb_kin(
                     new_seed,
                     MlpEmbKin(16, 19),
@@ -64,12 +58,12 @@ def train_models(seed, eeg_path, kin_path, epochs, learning_rate, gamma):
                 )
 
             except RuntimeError:
-                with open(f"{mlp_emb_kin_path}/a_{alpha}/{new_seed}/data.txt", "a+") as f:
+                with open(
+                    f"{mlp_emb_kin_path}/a_{alpha}/{new_seed}/data.txt", "a+"
+                ) as f:
                     f.write("COLLAPSED")
 
                 continue
-
-
 
             # train_eeg_emb_kin(
             #     new_seed,

@@ -72,7 +72,9 @@ class AutoDataset(Dataset):
 
 
 class RDMKinDataset(Dataset):
-    def __init__(self, eeg_data: NDArray, kin_data: NDArray, generator: torch.Generator):
+    def __init__(
+        self, eeg_data: NDArray, kin_data: NDArray, generator: torch.Generator
+    ):
         """Creates a dataset with EEG data of 4 dimensions (Participants x Conditions x Input channels x Time steps) as input, and kinematics RDMs as targets.
 
         @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
@@ -82,13 +84,12 @@ class RDMKinDataset(Dataset):
         self.rdms = self.create_rdms(kin_data)
         self.data = self.copy_to_tensor(eeg_data)
         self.kin = self.copy_to_tensor(kin_data)
-        self.norm_dist = torch.normal(torch.ones_like(self.rdms)*torch.mean(self.rdms), torch.ones_like(self.rdms)*torch.std(self.rdms), generator=generator)
 
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, idx):
-        return self.data[idx], (self.rdms[idx], self.norm_dist[idx], self.kin[idx])
+        return self.data[idx], (self.rdms[idx], self.kin[idx])
 
     @staticmethod
     def create_rdms(kin_data: NDArray) -> torch.Tensor:

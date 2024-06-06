@@ -62,18 +62,14 @@ class CnnEmbKin(nn.Module):
                 dtype=DTYPE_TORCH,
             ),
             nn.ReLU(),
-            nn.Conv1d(
-                10,
-                1,
-                kernel_size=3,
-                stride=1,
-                padding=0,
-                groups=1,
-                bias=True,
-                padding_mode="zeros",
-                dtype=DTYPE_TORCH,
-            ),
-            nn.ReLU(),
+        )
+
+        self.mean_head = nn.Sequential(
+            nn.Linear(10, 1, dtype=DTYPE_TORCH),
+        )
+
+        self.var_head = nn.Sequential(
+            nn.Linear(10, 1, dtype=DTYPE_TORCH),
         )
 
         self.decoder = nn.Sequential(
@@ -171,14 +167,24 @@ class CnnEmbKin(nn.Module):
         )
         return data_copy
 
-    def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, data: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute an RDM based on 1 - R^2 of the passed signals.
 
         @param data: A tensor of shape (participants x grasp phase x condition x inputs x time)
         @return: Embeddings and outputs.
         """
+
+        def reparameterization(mean, var):
+            epsilon = torch.randn_like(var)
+            z = mean + var * epsilon
+            return z
+
         reshaped_data = self.reshape_data(data)
         embeddings = self.encoder(reshaped_data)
-        outputs = self.unshape_data(self.decoder(embeddings), data.shape)
+        mean, var = self.mean_head(embeddings), self.var_head(embeddings)
+        reparams = reparameterization(mean, var)
+        outputs = self.unshape_data(self.decoder(reparams), data.shape)
 
-        return embeddings, outputs
+        return mean, var, reparams, outputs

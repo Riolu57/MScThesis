@@ -24,8 +24,14 @@ class MlpEmbKin(nn.Module):
             nn.ReLU(),
             nn.Linear(20, 10, dtype=DTYPE_TORCH),
             nn.ReLU(),
+        )
+
+        self.mean_head = nn.Sequential(
             nn.Linear(10, 1, dtype=DTYPE_TORCH),
-            nn.ReLU(),
+        )
+
+        self.var_head = nn.Sequential(
+            nn.Linear(10, 1, dtype=DTYPE_TORCH),
         )
 
         self.decoder = nn.Sequential(
@@ -71,14 +77,24 @@ class MlpEmbKin(nn.Module):
         )
         return data_copy.transpose(3, 4)
 
-    def forward(self, data: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(
+        self, data: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Compute an RDM based on 1 - R^2 of the passed signals.
 
         @param data: A tensor of shape (participants x grasp phase x condition x inputs x time)
         @return: Embeddings and outputs.
         """
-        reshaped_data = self.reshape_data(data)
-        embeddings = self.encoder(reshaped_data)
-        outputs = self.unshape_data(self.decoder(embeddings), data.shape)
 
-        return embeddings, outputs
+        def reparameterization(mean, var):
+            epsilon = torch.randn_like(var)
+            z = mean + var * epsilon
+            return z
+
+        reshaped_data = self.reshape_data(data)
+        encodings = self.encoder(reshaped_data)
+        mean, var = self.mean_head(encodings), self.var_head(encodings)
+        reparams = reparameterization(mean, var)
+        outputs = self.unshape_data(self.decoder(reparams), data.shape)
+
+        return mean, var, reparams, outputs
