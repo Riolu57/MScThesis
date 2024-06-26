@@ -1,206 +1,103 @@
-from typing import Tuple
-from numpy.typing import NDArray
+from CONFIG import DTYPE_TORCH
 
-import numpy as np
+from typing import Tuple
+from util.type_hints import DataConstruct
+
 import torch
 from torch.utils.data import Dataset
 
-from data.loading import split_data, load_all_data
 from data.rdms import create_5D_rdms
+from data.reshaping import reshape_to_3D, adjust_5D_data
 
 
-class RDMDataset(Dataset):
-    def __init__(self, eeg_data: NDArray, kinematics_data: NDArray):
-        """Creates a dataset with EEG data of 4 dimensions (Participants x Conditions x Input channels x Time steps) as input, and kinematics RDMs as targets.
+def copy_as_tensor(data: DataConstruct) -> torch.Tensor:
+    """Casts data as torch Tensor.
 
-        @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @param kinematics_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        """
-        self.labels = self.create_rdms(kinematics_data)
-        self.data = self.copy_eep(eeg_data)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
-
-    @staticmethod
-    def create_rdms(kin_data: NDArray) -> torch.Tensor:
-        """Creates Representation Dissimilarity Maps (RDMs) based off of the passed data.
-        @param kin_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @return: 4D Tensor of RDMs: (Index x Grasp Phase x Condition x Condition)
-        """
-        accum = torch.empty(0)
-        data_copy = torch.tensor(kin_data[:])
-        for participant in data_copy:
-            rdms = torch.empty(0)
-            res = participant.reshape(
-                participant.shape[0],
-                participant.shape[1],
-                participant.shape[2] * participant.shape[3],
-            )
-            for y in res:
-                rdm = (torch.ones(participant.shape[1]) - torch.corrcoef(y)).reshape(
-                    1, 1, participant.shape[1], participant.shape[1]
-                )
-                rdms = torch.concatenate((rdms, rdm), axis=1)
-            accum = torch.concatenate((accum, rdms), 0)
-        return accum
-
-    @staticmethod
-    def copy_eep(eeg_data: NDArray) -> torch.Tensor:
-        """Copies NP array to Tensor.
-
-        @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @return: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        """
-        tensor_data = torch.as_tensor(eeg_data)
-        return tensor_data
-
-
-class AutoDataset(Dataset):
-    def __init__(self, data):
-        self.labels = data
-        self.data = data
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
-
-
-class RDMKinDataset(Dataset):
-    def __init__(
-        self, eeg_data: NDArray, kin_data: NDArray, generator: torch.Generator
-    ):
-        """Creates a dataset with EEG data of 4 dimensions (Participants x Conditions x Input channels x Time steps) as input, and kinematics RDMs as targets.
-
-        @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @param kinematics_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @param generator: Torch pseudorandom number generator used for sampling.
-        """
-        self.rdms = self.create_rdms(kin_data)
-        self.data = self.copy_to_tensor(eeg_data)
-        self.kin = self.copy_to_tensor(kin_data)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], (self.rdms[idx], self.kin[idx])
-
-    @staticmethod
-    def create_rdms(kin_data: NDArray) -> torch.Tensor:
-        """Creates Representation Dissimilarity Maps (RDMs) based off of the passed data.
-        @param kin_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @return: 4D Tensor of RDMs: (Index x Grasp Phase x Condition x Condition)
-        """
-        accum = torch.empty(0)
-        data_copy = torch.tensor(kin_data[:])
-        for participant in data_copy:
-            rdms = torch.empty(0)
-            res = participant.reshape(
-                participant.shape[0],
-                participant.shape[1],
-                participant.shape[2] * participant.shape[3],
-            )
-            for y in res:
-                rdm = (torch.ones(participant.shape[1]) - torch.corrcoef(y)).reshape(
-                    1, 1, participant.shape[1], participant.shape[1]
-                )
-                rdms = torch.concatenate((rdms, rdm), axis=1)
-            accum = torch.concatenate((accum, rdms), 0)
-        return accum
-
-    @staticmethod
-    def copy_to_tensor(data: NDArray) -> torch.Tensor:
-        """Copies NP array to Tensor.
-
-        @param data: Data as NP array
-        @return: Data as Torch tensor
-        """
-        tensor_data = torch.as_tensor(data)
-        return tensor_data
-
-
-class EEGKinDataset(Dataset):
-    def __init__(self, eeg_data: NDArray, kinematics_data: NDArray):
-        """Creates a dataset with EEG data of 5 dimensions (Participants x Conditions x Input channels x Time steps) as input, and kinematics data as targets.
-
-        @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        @param kinematics_data: Kinematics data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
-        """
-        self.data = torch.as_tensor(eeg_data)
-        self.labels = torch.as_tensor(kinematics_data)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        return self.data[idx], self.labels[idx]
-
-
-def _prepare_rdm_datasets(
-    eeg_data_path: str, kinematics_data_path: str, dataset: Dataset, *args, **kwargs
-) -> Tuple[Dataset, Dataset, Dataset]:
-    """Creates a dataset of training, validation and testing data using the provided dataset class. Said class must accept 2 inputs, EEG and kinematics data.
-
-    @param eeg_data_path: Path to the EEG data.
-    @param kinematics_data_path: Path to the kinematics data.
-    @param dataset: Torch Dataset class which accepts EEG and Kinematics data as arguments.
-    @return: Tuple containing training, validation and testing datasets.
+    @param data: Some array-like construct
+    @return: Data as tensor.
     """
-    (train_eeg_data, val_eeg_data, test_eeg_data), (
-        train_kin,
-        val_kin,
-        test_kin,
-    ) = load_all_data(eeg_data_path, kinematics_data_path)
+    return torch.as_tensor(data, dtype=DTYPE_TORCH)
+
+
+class EEGRDMDataset(Dataset):
+    def __init__(self, eeg_data, kin_data):
+        self.eeg = adjust_5D_data(copy_as_tensor(eeg_data))
+        self.rdms = create_5D_rdms(copy_as_tensor(kin_data))
+
+    def __len__(self):
+        return len(self.eeg)
+
+    def __getitem__(self, idx):
+        return self.eeg[idx], self.rdms[idx]
+
+
+def prepare_eeg_rdm_data(
+    eeg_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+    kin_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+) -> tuple[EEGRDMDataset, EEGRDMDataset, EEGRDMDataset]:
+    """Creates a dataset which uses EEG data as input and associated kinematics RDMs as outputs.
+
+    @param eeg_data: Loaded EEG data.
+    @param kin_data: Loaded Kinematics data.
+    @return: Train, Validation and Test data.
+    """
+    train_eeg, val_eeg, test_eeg = eeg_data
+    train_kin, val_kin, test_kin = kin_data
 
     return (
-        dataset(train_eeg_data, train_kin, *args, **kwargs),
-        dataset(val_eeg_data, val_kin, *args, **kwargs),
-        dataset(test_eeg_data, test_kin, *args, **kwargs),
+        EEGRDMDataset(train_eeg, train_kin),
+        EEGRDMDataset(val_eeg, val_kin),
+        EEGRDMDataset(test_eeg, test_kin),
     )
 
 
-def prepare_rdm_data(
-    eeg_data_path: str, kinematics_data_path: str
-) -> Tuple[RDMDataset, RDMDataset, RDMDataset]:
-    """Creates a dataset of training, validation and testing data to train for RDM embeddings. Suitable for MLPs. Input data will be of shape (Participants + Grasp phase x Conditions x Input channel x Time steps).
+class EmbKinDataset(Dataset):
+    def __init__(self, emb_data: DataConstruct, kin_data: DataConstruct):
+        self.emb = reshape_to_3D(copy_as_tensor(emb_data))
+        self.kin = reshape_to_3D(copy_as_tensor(kin_data))
 
-    @param eeg_data_path: Path to the EEG data.
-    @param kinematics_data_path: Path to the kinematics data.
-    @return: Tuple containing training, validation and testing datasets.
+    def __len__(self):
+        return len(self.emb)
+
+    def __getitem__(self, idx):
+        return self.emb[idx], self.kin[idx]
+
+
+def _prepare_emb_kin_data(
+    emb_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+    kin_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+) -> tuple[EmbKinDataset, EmbKinDataset, EmbKinDataset]:
+    """Creates a dataset which uses embedded EEG data as input and associated kinematics data as outputs.
+
+    @param emb_data: Embedded EEG data.
+    @param kin_data: Loaded Kinematics data.
+    @return: Train, Validation and Test data.
     """
+    train_emb, val_emb, test_emb = emb_data
+    train_kin, val_kin, test_kin = kin_data
 
-    return _prepare_rdm_datasets(eeg_data_path, kinematics_data_path, RDMDataset)
+    return (
+        EmbKinDataset(train_emb, train_kin),
+        EmbKinDataset(val_emb, val_kin),
+        EmbKinDataset(test_emb, test_kin),
+    )
 
 
-def prepare_kin_eeg_data_rnn(
-    eeg_data_path: str, kin_data_path: str
-) -> Tuple[EEGKinDataset, EEGKinDataset, EEGKinDataset]:
-    """Creates a dataset of training, validation and testing data to train for EEG -> Kinematics predictions. Suitable for RNNs.
+def prepare_model_emb_kin_data(
+    eeg_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+    kin_data: Tuple[DataConstruct, DataConstruct, DataConstruct],
+    model: torch.nn.Module,
+) -> tuple[EmbKinDataset, EmbKinDataset, EmbKinDataset]:
+    """Creates data from EEG emb. to Kin.
 
-    @param eeg_data_path: Path to the EEG data.
-    @param kinematics_data_path: Path to the kinematics data.
-    @return: Tuple containing training, validation and testing datasets.
+    @param eeg_data: Loaded EEG data.
+    @param kin_data: Loaded Kin data.
+    @param model: Torch network reducing the dimensionality. Needs to return 5D data.
+    @return: Train, Val and Test data.
     """
-    return _prepare_rdm_datasets(eeg_data_path, kin_data_path, EEGKinDataset)
-
-
-def prepare_eeg_emb_kin_data(
-    eeg_data_path: str, kin_data_path: str, seed: int
-) -> Tuple[RDMKinDataset, RDMKinDataset, RDMKinDataset]:
-    """Creates a dataset of training, validation and testing data to train for EEG -> Kinematics predictions and train
-        the createed embeddings using RSA.
-
-    @param eeg_data_path: Path to the EEG data.
-    @param kinematics_data_path: Path to the kinematics data.
-    @param seed: Seed for torch generator for sampling stability.
-    @return: Tuple containing training, validation and testing datasets.
-    """
-    gen = torch.Generator()
-    gen.manual_seed(seed)
-    return _prepare_rdm_datasets(eeg_data_path, kin_data_path, RDMKinDataset, gen)
+    model.eval()
+    train_eeg, val_eeg, test_eeg = eeg_data
+    train_eeg = model(copy_as_tensor(train_eeg))
+    val_eeg = model(copy_as_tensor(val_eeg))
+    test_eeg = model(copy_as_tensor(test_eeg))
+    return _prepare_emb_kin_data((train_eeg, val_eeg, test_eeg), kin_data)

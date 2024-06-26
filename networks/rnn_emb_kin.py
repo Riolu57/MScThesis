@@ -7,17 +7,16 @@ import torch
 
 
 class RnnEmbKin(nn.Module):
-    def __init__(self, in_dim: int, out_dim: int):
+    def __init__(self, in_dim: int):
         super().__init__()
 
         self.in_dim = in_dim
-        self.out_dim = out_dim
 
-        hidden_size = 1
+        self.hidden_size = 10
 
         self.rnn = nn.RNN(
             input_size=self.in_dim,
-            hidden_size=hidden_size,
+            hidden_size=self.hidden_size,
             num_layers=1,
             nonlinearity="tanh",
             bias=True,
@@ -27,32 +26,15 @@ class RnnEmbKin(nn.Module):
         )
 
         self.mean_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size, dtype=DTYPE_TORCH),
+            nn.Linear(self.hidden_size, 1, dtype=DTYPE_TORCH),
         )
 
         self.var_head = nn.Sequential(
-            nn.Linear(hidden_size, hidden_size, dtype=DTYPE_TORCH),
+            nn.Linear(self.hidden_size, 1, dtype=DTYPE_TORCH),
         )
 
-        self.out_layer = nn.Sequential(nn.Linear(hidden_size, self.out_dim), nn.ReLU())
-
     @staticmethod
-    def preshape_data(data: DataConstruct) -> DataConstruct:
-        """Reshapes data to be easily processed by the rnn part of the network.
-        @param data: A 5D DataConstruct, where dimension 3 are the input channels and 4 the time points.
-        @return: A 3D DataConstruct reshaped, such that self.rnn(self.preshape_data(data)) is as fast as possible.
-        """
-        data_copy = data[:]
-        data_copy = data_copy.transpose(3, 4)
-        data_copy = data_copy.reshape(
-            data_copy.shape[0] * data_copy.shape[1] * data_copy.shape[2],
-            data_copy.shape[3],
-            data_copy.shape[4],
-        )
-        return data_copy
-
-    @staticmethod
-    def reshape_data(data: DataConstruct) -> DataConstruct:
+    def reshape_data(data: torch.Tensor) -> torch.Tensor:
         """Reshapes Rnn output such that non-time dependent layers can easily process it.
 
         @param data: RNN output of hidden states.
@@ -60,45 +42,42 @@ class RnnEmbKin(nn.Module):
         """
         data_copy = data[:]
         data_copy = data_copy.reshape(
-            data_copy.shape[0] * data_copy.shape[1], data_copy.shape[2]
+            data.shape[0] * data.shape[1], data.shape[2], data.shape[3]
         )
+        return data_copy.transpose(1, 2)
 
-        return data_copy
+    def unshape_data(
+        self, rnn_states: torch.Tensor, new_shape: DataShape
+    ) -> torch.Tensor:
+        """Reshapes RNN states to 4D data again.
 
-    def unshape_data(self, data: DataConstruct, shape: DataShape) -> DataConstruct:
-        """Reshapes model output to old shape, given the data.
-        @param data: Model output data, to be reshaped.
-        @param shape: The shape of the old data.
-        @return: The model data reshaped to its original size.
+        @param rnn_states: RNN states to be reshaped.
+        @param new_shape: New shape of RNN data.
+        @return: 4D Data
         """
-        data_copy = data[:]
-        data_copy = data_copy.reshape(
-            shape[0], shape[1], shape[2], shape[4], self.out_dim
+        data_copy = rnn_states[:]
+        return data_copy.reshape(
+            new_shape[0], new_shape[1], new_shape[3], self.hidden_size
         )
-        return data_copy.transpose(3, 4)
 
     def forward(
         self, data: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Computes the model output given some data.
         @param data: Input data. Expected to be 5D, where dim 3 are the input channels.
         @return: Model output of nearly the same shape as input.
         """
 
         def reparameterization(mean, var):
-            epsilon = torch.randn_like(var)
+            epsilon = torch.rand(data.shape[0], data.shape[1], 1, data.shape[3])
             z = mean + var * epsilon
             return z
 
-        new_data = self.preshape_data(data)
-        rnn_states, _ = self.rnn(new_data)
-        linear_data = self.reshape_data(rnn_states)
-        mean, var = self.mean_head(linear_data), self.var_head(linear_data)
+        reshaped_data = self.reshape_data(data)
+        rnn_states = self.unshape_data(self.rnn(reshaped_data)[0], data.shape)
+        mean, var = self.mean_head(rnn_states).transpose(2, 3), self.var_head(
+            rnn_states
+        ).transpose(2, 3)
         reparams = reparameterization(mean, var)
 
-        return (
-            mean,
-            var,
-            reparams,
-            self.unshape_data(self.out_layer(reparams), data.shape),
-        )
+        return mean, var, reparams

@@ -1,18 +1,17 @@
 # TypeHint only imports
 import os.path
+import time
 
 from util.type_hints import *
+from util.prettier import pcolors
 from typing import Callable, Iterable
 from torch.utils.data import Dataset
-from torch.nn import MSELoss
 
 from training.basic_loops import nn_train_loop, nn_test_loop
-from networks.loss import loss_wrapper_train, pre_train_loss, empty_loss
-from networks.autoencoder import Autoencoder
+from networks.loss import mixed_loss, pre_train_loss
+from networks.util import save_model
 
-from data.datasets import prepare_eeg_emb_kin_data, split_data, AutoDataset
-
-from data.loading import load_eeg_data, load_kinematics_data
+from data.datasets import prepare_eeg_rdm_data
 
 from torch.utils.data import DataLoader
 import torch
@@ -65,151 +64,73 @@ def train_network(
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
     lowest_loss = np.infty
+    lowest_pre_loss = np.infty
+
+    pre_train_times = []
+    train_times = []
 
     for epoch in range(epochs):
+        current_time = time.time()
         print(
-            f"======================================== CURRENT EPOCH: {epoch + 1} ========================================"
+            f"\n{pcolors.BOLD}============================ CURRENT EPOCH: {epoch + 1} ({model.__class__.__name__}) ============================{pcolors.ENDC}"
         )
 
         if epoch < pre_train:
-            nn_train_loop(
-                f"{model_path}/data.txt",
-                train_loader,
-                model,
-                pre_train_loss_func,
-                optimizer,
-                alpha,
-            )
-
-            test_loss = nn_test_loop(
-                f"{model_path}/data.txt", val_loader, model, pre_train_loss
-            )
+            save_name = "lowest_val_loss_pre_train"
+            cur_loss = pre_train_loss_func
 
         else:
-            nn_train_loop(
-                f"{model_path}/data.txt",
-                train_loader,
-                model,
-                loss,
-                optimizer,
-                alpha,
-            )
+            save_name = "lowest_val_loss"
+            cur_loss = loss
 
-            test_loss = nn_test_loop(f"{model_path}/data.txt", val_loader, model, loss)
+        nn_train_loop(
+            f"{model_path}/data.txt",
+            train_loader,
+            model,
+            cur_loss,
+            optimizer,
+            alpha,
+        )
 
-            if test_loss < lowest_loss:
-                torch.save(
-                    {
-                        "model_state_dict": model.state_dict(),
-                        "optimizer_state_dict": optimizer.state_dict(),
-                        "epoch": epoch,
-                    },
-                    f"{model_path}/lowest_val_loss",
+        test_loss = nn_test_loop(f"{model_path}/data.txt", val_loader, model, cur_loss)
+
+        if epoch < pre_train:
+            if test_loss < lowest_pre_loss:
+                save_model(model, f"{model_path}/{save_name}", optimizer, epoch)
+                lowest_pre_loss = test_loss
+
+            pre_train_times.append(current_time)
+            if len(pre_train_times) > 1:
+                current_est = np.mean(np.diff(pre_train_times))
+                min, sec = divmod(current_est * (pre_train - epoch), 60)
+                print(
+                    f"{pcolors.BOLD}Time Estimate (Pre Train): {int(min)}m {int(sec)}s{pcolors.ENDC}"
                 )
+
+        elif epoch >= pre_train:
+            if test_loss < lowest_loss:
+                save_model(model, f"{model_path}/{save_name}", optimizer, epoch)
                 lowest_loss = test_loss
 
-        if test_loss < lowest_loss:
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "epoch": epoch,
-                },
-                f"{model_path}/lowest_val_loss",
-            )
-            lowest_loss = test_loss
+            train_times.append(current_time)
+            if len(train_times) > 1:
+                current_est = np.mean(np.diff(train_times))
+                min, sec = divmod(current_est * (epochs - epoch), 60)
+                print(
+                    f"{pcolors.BOLD}Time Estimate (Train): {int(min)}m {int(sec)}s{pcolors.ENDC}"
+                )
 
 
-def train_autoencoder_eeg(
-    seed: int,
-    eeg_path: str,
-    model_path: str,
-    epochs: int,
-    learning_rate: float,
-    alpha: float,
-) -> None:
-    """Trains an MLP Autoencoder using EEG data.
-
-    @param seed: Seed for the experiment.
-    @param eeg_path: Path where EEG data is saved.
-    @param model_path: Path where the model should be saved.
-    @param epochs: For how many epochs the model should be trained for.
-    @param learning_rate: Learning rate of ADAM.
-    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
-    @return: None.
-    """
-    train_data, val_data, test_data = split_data(load_eeg_data(eeg_path))
-
-    train_data = AutoDataset(train_data)
-    val_data = AutoDataset(val_data)
-    test_data = AutoDataset(test_data)
-
-    model = Autoencoder(train_data[0][0].shape[2])
-
-    train_network(
-        model,
-        MSELoss(),
-        [train_data, val_data, test_data],
-        seed,
-        model_path,
-        epochs,
-        learning_rate,
-        alpha,
-        0,
-        empty_loss,
-    )
-
-
-def train_autoencoder_kin(
-    seed: int,
-    kin_path: str,
-    model_path: str,
-    epochs: int,
-    learning_rate: float,
-    alpha: float,
-) -> None:
-    """Trains an MLP Autoencoder using EEG data.
-
-    @param seed: Seed for the experiment.
-    @param kin_path: Path where Kinematics data is saved.
-    @param model_path: Path where the model should be saved.
-    @param epochs: For how many epochs the model should be trained for.
-    @param learning_rate: Learning rate of ADAM.
-    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
-    @return: None.
-    """
-    train_data, val_data, test_data = split_data(load_kinematics_data(kin_path))
-
-    train_data = AutoDataset(train_data)
-    val_data = AutoDataset(val_data)
-    test_data = AutoDataset(test_data)
-
-    model = Autoencoder(train_data[0][0].shape[2])
-
-    train_network(
-        model,
-        MSELoss(),
-        [train_data, val_data, test_data],
-        seed,
-        model_path,
-        epochs,
-        learning_rate,
-        alpha,
-        0,
-        empty_loss,
-    )
-
-
-def train_eeg_emb_kin(
+def train_eeg_emb(
     seed: int,
     model: torch.nn.Module,
-    eeg_path: str,
-    kin_path: str,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
     model_path: str,
     epochs: int,
+    pre_train: int,
     learning_rate: float,
     alpha: float,
-    gamma: float,
 ) -> None:
     """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
 
@@ -220,22 +141,21 @@ def train_eeg_emb_kin(
     @param model_path: Path where the model should be saved.
     @param epochs: For how many epochs the model should be trained for.
     @param learning_rate: Learning rate of ADAM.
-    @param alpha: Fro loss between embedding and Kin RDMs. [0, 1]. Also regulates MSE loss between prediction and kin (1 - alpha).
-    @param gamma: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @return: None.
     """
 
-    data = prepare_eeg_emb_kin_data(eeg_path, kin_path, seed)
+    data = prepare_eeg_rdm_data(eeg_data, kin_data)
 
     train_network(
         model,
-        loss_wrapper_train(alpha),
+        mixed_loss,
         data,
         seed,
         model_path,
         epochs,
         learning_rate,
-        gamma,
-        50,
+        alpha,
+        pre_train,
         pre_train_loss,
     )

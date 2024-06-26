@@ -1,8 +1,6 @@
 import os.path
 
 import torch
-from networks.rdm_network import RdmMlp
-from networks.autoencoder import Autoencoder, AutoEmbedder
 
 from util.paths import get_subfiles
 
@@ -14,33 +12,6 @@ def get_best_network(network_path: str) -> str:
     @return: Full path to the last trained network.
     """
     return os.path.join(network_path, "lowest_val_loss")
-
-
-def get_auto_inference_network(network_path: str, input_neurons: int) -> AutoEmbedder:
-    """Loads an Autoencoder as embedder only.
-
-    @param network_path: Path to the folder containing saved states of the autoencoder to be loaded.
-    @param input_neurons: The number of input neurons the network has.
-    @return: Network cut down to the embedder.
-    """
-    path = get_best_network(network_path)
-    net = Autoencoder(input_neurons)
-    _get_inference_network(path, net)
-    embedder = AutoEmbedder(net)
-    return embedder
-
-
-def get_rdm_inference_network(network_path: str, input_neurons: int) -> RdmMlp:
-    """Loads an RDM MLP.
-
-    @param network_path: Path to the folder containing saved states of the RDM MLP to be loaded.
-    @param input_neurons: The number of input neurons the network has.
-    @return: RDM MLP.
-    """
-    path = get_best_network(network_path)
-    net = RdmMlp(input_neurons)
-    _get_inference_network(path, net)
-    return net
 
 
 def get_rnn_rdm_network(network_path: str, input_neurons: int) -> torch.nn.RNN:

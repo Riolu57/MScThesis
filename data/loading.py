@@ -174,10 +174,12 @@ def split_data(data: np.array) -> Tuple[NDArray, NDArray, NDArray]:
         train_data.shape[0] + test_size : train_data.shape[0] + 2 * test_size
     ]
 
-    norm_val = train_data.max()
-    train_data /= norm_val
-    val_data /= norm_val
-    test_data /= norm_val
+    max_val = train_data.max()
+    min_val = train_data.min()
+
+    train_data = (train_data - min_val) / max_val
+    val_data = (val_data - min_val) / max_val
+    test_data = (test_data - min_val) / max_val
 
     return train_data, val_data, test_data
 

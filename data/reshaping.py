@@ -1,5 +1,7 @@
-import torch
 from util.type_hints import DataShape
+from typing import Tuple
+
+import torch
 
 
 def rnn_reshaping(eeg_data: torch.Tensor) -> torch.Tensor:
@@ -46,3 +48,36 @@ def cnn_unshaping(hidden_states: torch.Tensor, shape: DataShape) -> torch.Tensor
         (shape[0], shape[1], shape[2], hidden_states.shape[1], hidden_states.shape[2]),
     )
     return data_copy
+
+
+def adjust_5D_data(eeg_data: torch.Tensor) -> torch.Tensor:
+    return eeg_data.reshape(
+        eeg_data.shape[0] * eeg_data.shape[1],
+        eeg_data.shape[2],
+        eeg_data.shape[3],
+        eeg_data.shape[4],
+    )
+
+
+def reshape_to_3D(data: torch.Tensor) -> torch.Tensor:
+    """Transforms data into (All, channel, time).
+
+    @param data: 5D data of shape (Participant, Grasp Phase, Condition, Channel, Time)
+    @return: Tensor with (Participant x Grasp Phase x Condition, Channel, Time)
+    """
+    return torch.reshape(
+        data,
+        (data.shape[0] * data.shape[1] * data.shape[2], data.shape[3], data.shape[4]),
+    )
+
+
+def unshape_from_3D(
+    data: torch.Tensor, shape: Tuple[int, int, int, int, int]
+) -> torch.Tensor:
+    """Shapes 3D data to 5D.
+
+    @param data: 3D data of shape (All, channel, time)
+    @param shape: Tuple containing the goal shape.
+    @return: 5D data of shape (Participant, Grasp Phase, Condition, Channel, Time)
+    """
+    return torch.reshape(data, shape)

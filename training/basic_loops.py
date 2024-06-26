@@ -1,21 +1,20 @@
 import numpy as np
 
 from util.type_hints import *
+from util.prettier import pcolors
 from typing import Callable
 from torch.utils.data import DataLoader
 from sklearn.base import BaseEstimator
 
 import torch
-from data.rdms import create_5D_rdms
-from data.reshaping import rnn_reshaping, rnn_unshaping, cnn_unshaping
 
 from networks.loss import fro_loss
 from networks.util import get_rdms
 
-from networks.autoencoder import Autoencoder
 from networks.rnn_emb_kin import RnnEmbKin
 from networks.mlp_emb_kin import MlpEmbKin
 from networks.cnn_emb_kin import CnnEmbKin
+from networks.predictor import Predictor
 
 
 def nn_train_loop(
@@ -43,29 +42,18 @@ def nn_train_loop(
 
     # Go through training data according to batches
     for batch_idx, (X, y) in enumerate(dataloader):
-        print(f"Current batch idx: {batch_idx}")
+        norm_param = y.shape[0]
 
         # Reset gradients
         optimizer.zero_grad()
 
         # Compute prediction and loss based on architecture
         if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
-            norm_param = y[0].shape[0]
-
-            mean, var, rdms, outputs = get_rdms(X, model)
-
-            target_rdms = y[0][:]
-            target_rdms = target_rdms.reshape(
-                target_rdms.shape[0] * target_rdms.shape[1],
-                target_rdms.shape[2],
-                target_rdms.shape[3],
-            )
-
-            loss = loss_fn(mean, var, rdms, outputs, target_rdms, y[1])
-        elif isinstance(model, Autoencoder):
-            norm_param = y.shape[0]
-            pred = model(X)
-            loss = loss_fn(pred, y)
+            mean, var, rdms = get_rdms(X, model)
+            loss = loss_fn(mean, var, rdms, y)
+        elif isinstance(model, (Predictor)):
+            output = model(X)
+            loss = torch.nn.MSELoss()(output, y)
         else:
             raise NotImplemented("This type of architecture is not yet supported.")
 
@@ -88,11 +76,11 @@ def nn_train_loop(
     else:
         # Losses were already adjusted, so now we just need to normalize per number of batches (and alpha)
         adjusted_model_loss = full_model_loss / len(dataloader)
-        adjusted_reg_loss = alpha * full_reg_loss / len(dataloader)
+        adjusted_reg_loss = full_reg_loss / len(dataloader)
 
         # Print and write info
-        print(f"Train loss: {adjusted_model_loss}")
-        print(f"\tReg Loss: {adjusted_reg_loss}")
+        print(f"{pcolors.OKGREEN}Train loss: {adjusted_model_loss}{pcolors.ENDC}")
+        print(f"\t{pcolors.OKCYAN}Reg Loss: {adjusted_reg_loss}{pcolors.ENDC}")
 
         # Save data at specified path
         with open(path, "a+") as f:
@@ -114,37 +102,34 @@ def nn_test_loop(
     """
     # Set model to evaluation/inference mode
     model.eval()
-    size = len(dataloader.dataset)
-    loss, correct = 0, 0
 
-    # Evaluating the model with torch.no_grad() ensures that no gradients are computed during test mode
-    # also serves to reduce unnecessary gradient computations and memory usage for tensors with requires_grad=True
+    full_model_loss = 0
+
+    # Go through training data according to batches
     with torch.no_grad():
-        for X, y in dataloader:
+        for batch_idx, (X, y) in enumerate(dataloader):
+            norm_param = y.shape[0]
+
+            # Compute prediction and loss based on architecture
             if isinstance(model, (MlpEmbKin, RnnEmbKin, CnnEmbKin)):
-                mean, var, rdms, outputs = get_rdms(X, model)
-
-                target_rdms = y[0][:]
-                target_rdms = target_rdms.reshape(
-                    target_rdms.shape[0] * target_rdms.shape[1],
-                    target_rdms.shape[2],
-                    target_rdms.shape[3],
-                )
-
-                loss = loss_fn(mean, var, rdms, outputs, target_rdms, y[1])
-            elif isinstance(model, Autoencoder):
-                pred = model(X)
-                loss = loss_fn(pred, y)
+                mean, var, rdms = get_rdms(X, model)
+                loss = loss_fn(mean, var, rdms, y)
+            elif isinstance(model, (Predictor)):
+                output = model(X)
+                loss = torch.nn.MSELoss()(output, y)
             else:
                 raise NotImplemented("This type of architecture is not yet supported.")
 
+            # Normalize losses per number of datapoints
+            full_model_loss += loss.item() / norm_param
+
     # Write performance to file
     with open(path, "a+") as f:
-        f.write(f"V:{loss / size}\n")
+        f.write(f"V:{loss / len(dataloader)}\n")
 
     # Adjust loss to be mean loss
-    loss /= size
-    print(f"Eval loss: {loss:>8f}")
+    loss /= len(dataloader)
+    print(f"{pcolors.WARNING}Eval loss: {loss:>8f}{pcolors.ENDC}")
 
     return loss
 
