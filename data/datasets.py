@@ -53,8 +53,8 @@ def prepare_eeg_rdm_data(
 
 class EmbKinDataset(Dataset):
     def __init__(self, emb_data: DataConstruct, kin_data: DataConstruct):
-        self.emb = reshape_to_3D(copy_as_tensor(emb_data))
-        self.kin = reshape_to_3D(copy_as_tensor(kin_data))
+        self.emb = copy_as_tensor(emb_data)
+        self.kin = copy_as_tensor(kin_data)
 
     def __len__(self):
         return len(self.emb)
@@ -95,9 +95,11 @@ def prepare_model_emb_kin_data(
     @param model: Torch network reducing the dimensionality. Needs to return 5D data.
     @return: Train, Val and Test data.
     """
+    full_eeg_data = []
+    full_kin_data = []
     model.eval()
-    train_eeg, val_eeg, test_eeg = eeg_data
-    train_eeg = model(copy_as_tensor(train_eeg))
-    val_eeg = model(copy_as_tensor(val_eeg))
-    test_eeg = model(copy_as_tensor(test_eeg))
-    return _prepare_emb_kin_data((train_eeg, val_eeg, test_eeg), kin_data)
+    for data in eeg_data:
+        full_eeg_data.append(model(adjust_5D_data(copy_as_tensor(data)))[2].detach())
+    for data in kin_data:
+        full_kin_data.append(adjust_5D_data(copy_as_tensor(data)))
+    return _prepare_emb_kin_data(full_eeg_data, full_kin_data)

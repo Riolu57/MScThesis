@@ -40,3 +40,7 @@ def mixed_loss(
     fro_loss = torch.sum((network_rdms - target_rdms).flatten() ** 2)
     KL_loss = -0.5 * torch.sum(1 + var - mean.pow(2) - var.exp())
     return fro_loss + KL_loss
+
+
+def empty_loss(*args, **kwargs):
+    raise NotImplementedError("This point should have never been reached.")

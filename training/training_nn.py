@@ -8,10 +8,13 @@ from typing import Callable, Iterable
 from torch.utils.data import Dataset
 
 from training.basic_loops import nn_train_loop, nn_test_loop
-from networks.loss import mixed_loss, pre_train_loss
+from networks.loss import mixed_loss, pre_train_loss, empty_loss
 from networks.util import save_model
+from util.network_loading import _get_inference_network
+from networks.predictor import Predictor
+from util.paths import get_subdirs
 
-from data.datasets import prepare_eeg_rdm_data
+from data.datasets import prepare_eeg_rdm_data, prepare_model_emb_kin_data
 
 from torch.utils.data import DataLoader
 import torch
@@ -136,8 +139,8 @@ def train_eeg_emb(
 
     @param seed: Seed for the experiment.
     @param model: The model which will be trained.
-    @param eeg_path: Path where EEG data is saved.
-    @param kin_path: Path where Kinematics data is saved.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
     @param model_path: Path where the model should be saved.
     @param epochs: For how many epochs the model should be trained for.
     @param learning_rate: Learning rate of ADAM.
@@ -159,3 +162,57 @@ def train_eeg_emb(
         pre_train,
         pre_train_loss,
     )
+
+
+def train_network_predictor(
+    model: torch.nn.Module,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+    pre_trained_only: bool = True,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param model: The model which will be loaded; architecture must be equivalent.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param pre_trained_only: Determines whether to use the pre-trained or fully trained model.
+    @return: None.
+    """
+
+    embedder_path = os.path.join(model_path, "embedder")
+
+    seeds = get_subdirs(embedder_path)
+
+    for seed in seeds:
+        seed_path = os.path.join(embedder_path, str(seed))
+        if pre_trained_only:
+            _get_inference_network(
+                os.path.join(seed_path, "lowest_val_loss_pre_train"),
+                model,
+            )
+
+        else:
+            _get_inference_network(os.path.join(seed_path, "lowest_val_loss"), model)
+
+        data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
+
+        train_network(
+            Predictor(19),
+            torch.nn.MSELoss(),
+            data,
+            int(seed),
+            os.path.join(model_path, "predictor", str(seed)),
+            epochs,
+            learning_rate,
+            alpha,
+            False,
+            empty_loss,
+        )

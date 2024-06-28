@@ -2,8 +2,6 @@ import os.path
 
 import torch
 
-from util.paths import get_subfiles
-
 
 def get_best_network(network_path: str) -> str:
     """Searches for network with the highest epoch count and returns its full path.

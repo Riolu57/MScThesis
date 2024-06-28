@@ -51,23 +51,24 @@ def cnn_unshaping(hidden_states: torch.Tensor, shape: DataShape) -> torch.Tensor
 
 
 def adjust_5D_data(eeg_data: torch.Tensor) -> torch.Tensor:
-    return eeg_data.reshape(
-        eeg_data.shape[0] * eeg_data.shape[1],
-        eeg_data.shape[2],
-        eeg_data.shape[3],
-        eeg_data.shape[4],
+    data_copy = eeg_data[:]
+    return data_copy.reshape(
+        data_copy.shape[0] * data_copy.shape[1],
+        data_copy.shape[2],
+        data_copy.shape[3],
+        data_copy.shape[4],
     )
 
 
 def reshape_to_3D(data: torch.Tensor) -> torch.Tensor:
     """Transforms data into (All, channel, time).
 
-    @param data: 5D data of shape (Participant, Grasp Phase, Condition, Channel, Time)
+    @param data: 4D data of shape (Participant * Grasp Phase, Condition, Channel, Time)
     @return: Tensor with (Participant x Grasp Phase x Condition, Channel, Time)
     """
     return torch.reshape(
         data,
-        (data.shape[0] * data.shape[1] * data.shape[2], data.shape[3], data.shape[4]),
+        (data.shape[0] * data.shape[1], data.shape[2], data.shape[3]),
     )
 
 
