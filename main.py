@@ -86,22 +86,21 @@ def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
 
     eeg_data, kin_data = load_all_data(eeg_path, kin_path)
 
-    for seed_iteration in range(5):
-        for model, model_path in zip(
-            [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
-            [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
-        ):
-            for pre_train in [True, False]:
-                train_network_predictor(
-                    model,
-                    eeg_data,
-                    kin_data,
-                    f"{model_path}",
-                    epochs,
-                    learning_rate,
-                    alpha,
-                    pre_train,
-                )
+    for model, model_path in zip(
+        [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+        [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
+    ):
+        for pre_train in [True, False]:
+            train_network_predictor(
+                model,
+                eeg_data,
+                kin_data,
+                f"{model_path}",
+                epochs,
+                learning_rate,
+                alpha,
+                pre_train,
+            )
 
 
 def plot_results(eeg_path, kin_path):
@@ -132,5 +131,5 @@ def main(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alpha):
 
 
 if __name__ == "__main__":
-    main(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, PRE_TRAIN, LEARNING_RATE, ALPHA)
-    # train_predictors(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA)
+    # main(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, PRE_TRAIN, LEARNING_RATE, ALPHA)
+    train_predictors(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA)

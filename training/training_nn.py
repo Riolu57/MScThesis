@@ -198,9 +198,11 @@ def train_network_predictor(
                 os.path.join(seed_path, "lowest_val_loss_pre_train"),
                 model,
             )
+            save_path = os.path.join(model_path, "predictor", str(seed), "pre_train")
 
         else:
             _get_inference_network(os.path.join(seed_path, "lowest_val_loss"), model)
+            save_path = os.path.join(model_path, "predictor", str(seed), "full_train")
 
         data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
@@ -209,7 +211,7 @@ def train_network_predictor(
             torch.nn.MSELoss(),
             data,
             int(seed),
-            os.path.join(model_path, "predictor", str(seed)),
+            save_path,
             epochs,
             learning_rate,
             alpha,
