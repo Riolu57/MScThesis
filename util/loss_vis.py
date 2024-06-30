@@ -17,6 +17,12 @@ from util.network_loading import (
     get_rnn_rdm_network,
 )
 
+from networks.predictor import Predictor
+
+from data.reshaping import adjust_5D_data
+
+from CONFIG import EPOCHS, PRE_TRAIN
+
 
 def get_col(low, high, factor):
     return tuple((1 - factor) * low + factor * high)
@@ -39,225 +45,356 @@ def normalize_list(val_list: Iterable, normalization_constant: float) -> list:
     return [i / normalization_constant for i in val_list]
 
 
-def plot_loss(common_path: str) -> None:
+def plot_loss(
+    model_path: str,
+    eeg_data: torch.Tensor,
+    kin_rdms: torch.Tensor,
+    model: torch.nn.Module,
+) -> None:
     """Plots loss functions of all networks saved in the directory. Expects to find models inside of subfolders.
 
     @param common_path: Superpath of folders containing models.
     @return: None.
     """
     # Iterate through different models and subfolders to get last version
-    file_name = "data.txt"
-    pre_train = 50
-    opacity = 0.1
+    opacity = 0.2
 
-    val_width = 1
+    train_full = np.array([1, 0.7, 0])
+    train_pre = np.array([0.5, 0, 1])
 
-    train_low = np.array([1, 0.7, 0])
-    train_high = np.array([0.5, 0, 1])
+    val_full = np.array([0.2, 1, 0])
+    val_pre = np.array([1, 0.2, 0.6])
 
-    val_low = np.array([0.2, 1, 0])
-    val_high = np.array([1, 0.7, 0.3])
+    # Initialize plot
+    fig, axs = plt.subplot_mosaic(
+        [
+            [
+                "Pre. Loss",
+                "Full Loss",
+                "Full Loss",
+                "Full Loss",
+                "Pre. RDM",
+                "Pre. RDM",
+            ],
+            [
+                "Reg. Loss",
+                "Reg. Loss",
+                "Reg. Loss",
+                "Reg. Loss",
+                "Full RDM",
+                "Full RDM",
+            ],
+        ],
+        figsize=(15, 9),
+    )
+    name = model_path.split("/")[2].upper().split("_")[0]
+    fig.suptitle(f"{name} Embedder")
 
-    dir_names = get_subdirs(common_path)
+    axs["Pre. Loss"].set_title(f"Pre-Train Loss")
+    axs["Full Loss"].set_title("Full Loss")
+    axs["Pre. RDM"].set_title("Pre-Train RDM")
+    axs["Reg. Loss"].set_title("Reg. Loss")
+    axs["Full RDM"].set_title("Full RDM")
 
-    for dir_name in dir_names:
-        version_dirs = get_subdirs(os.path.join(common_path, dir_name))
-        latest = sorted(version_dirs)[-1]
+    axs["Pre. Loss"].set_ylabel(f"Loss")
+    axs["Full Loss"].set_ylabel("Loss")
+    axs["Pre. RDM"].set_ylabel("Condition")
+    axs["Reg. Loss"].set_ylabel("Loss")
+    axs["Full RDM"].set_ylabel("Condition")
 
-        # Initialize plot per model
-        fig, (ax1, ax2, ax3) = plt.subplots(
-            1, 3, figsize=(15, 6), width_ratios=(5, 9, 10)
+    axs["Pre. Loss"].set_xlabel(f"Epoch")
+    axs["Full Loss"].set_xlabel("Epoch")
+    axs["Pre. RDM"].set_xlabel("Condition")
+    axs["Reg. Loss"].set_xlabel("Epoch")
+    axs["Full RDM"].set_xlabel("Condition")
+
+    seed_dirs = get_subdirs(os.path.join(model_path, "embedder"))
+
+    pre_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
+    full_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
+
+    # Track losses over trainings
+    train_loss = np.zeros((len(seed_dirs), EPOCHS))
+    val_loss = np.zeros((len(seed_dirs), EPOCHS))
+    reg_loss = np.zeros((len(seed_dirs), EPOCHS))
+
+    # Load models for all seeds
+    for idx, seed_dir in enumerate(seed_dirs):
+        # Get loss values
+        with open(
+            os.path.join(
+                model_path,
+                "embedder",
+                seed_dir,
+                "data.txt",
+            ),
+            "r",
+        ) as f:
+            lines = f.readlines()
+
+        train_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "T"])
+        val_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "V"])
+        reg_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "R"])
+
+        train_loss[idx] = train_loss_cur
+        val_loss[idx] = val_loss_cur
+        reg_loss[idx] = reg_loss_cur
+
+        # Plot pre-train loss functions
+        axs["Pre. Loss"].plot(
+            np.arange(1, PRE_TRAIN + 1),
+            train_loss_cur[:PRE_TRAIN],
+            linestyle=(0, (1, 1)),
+            color=train_pre,
+            alpha=opacity,
         )
-        name = dir_name.upper().split("_")[0]
-        fig.suptitle(f"Loss Values of {name}")
-        fig.supxlabel("Epochs")
-        fig.supylabel("Loss Value")
-
-        ax1.set_title("Pre-Training/Validation Loss")
-        ax2.set_title("Training/Validation Loss")
-        ax3.set_title("Regularization Loss")
-
-        alpha_dirs = get_subdirs(os.path.join(common_path, dir_name, latest))
-
-        for alpha_dir in alpha_dirs:
-            seed_dirs = get_subdirs(
-                os.path.join(common_path, dir_name, latest, alpha_dir)
-            )
-
-            alpha = int(alpha_dir[2:]) / 10
-
-            alpha_train_loss = None
-            alpha_val_loss = None
-            alpha_reg_loss = None
-
-            for seed_dir in seed_dirs:
-                with open(
-                    os.path.join(
-                        common_path, dir_name, latest, alpha_dir, seed_dir, file_name
-                    ),
-                    "r",
-                ) as f:
-                    lines = f.readlines()
-
-                train_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "T"])
-                ax1.plot(
-                    train_loss_cur[:pre_train],
-                    "-",
-                    color=get_col(train_low, train_high, alpha),
-                    alpha=opacity,
-                )
-                ax2.plot(
-                    np.arange(pre_train, len(train_loss_cur)),
-                    train_loss_cur[pre_train:],
-                    "-",
-                    color=get_col(train_low, train_high, alpha),
-                    alpha=opacity,
-                )
-                alpha_train_loss = concatenate_arrays(
-                    alpha_train_loss,
-                    train_loss_cur,
-                    1,
-                )
-
-                val_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "V"])
-                ax1.plot(
-                    val_loss_cur[:pre_train],
-                    "--",
-                    color=get_col(val_low, val_high, alpha),
-                    alpha=opacity,
-                    linewidth=val_width,
-                )
-                ax2.plot(
-                    np.arange(pre_train, len(val_loss_cur)),
-                    val_loss_cur[pre_train:],
-                    "--",
-                    color=get_col(val_low, val_high, alpha),
-                    alpha=opacity,
-                    linewidth=val_width,
-                )
-                alpha_val_loss = concatenate_arrays(
-                    alpha_val_loss,
-                    val_loss_cur,
-                    1,
-                )
-
-                reg_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "R"])
-                ax3.plot(
-                    reg_loss_cur,
-                    "-",
-                    color=get_col(train_low, train_high, alpha),
-                    alpha=opacity,
-                )
-                alpha_reg_loss = concatenate_arrays(
-                    alpha_reg_loss,
-                    reg_loss_cur,
-                    1,
-                )
-
-            train_loss = np.mean(alpha_train_loss, axis=1)
-            val_loss = np.mean(alpha_val_loss, axis=1)
-            reg_loss = np.mean(alpha_reg_loss, axis=1)
-
-            ax1.plot(
-                train_loss[:pre_train],
-                "-",
-                label=f"{name} Train ({alpha})",
-                color=get_col(train_low, train_high, alpha),
-            )
-
-            ax1.plot(
-                val_loss[:pre_train],
-                "--",
-                label=f"{name} Val. ({alpha})",
-                color=get_col(val_low, val_high, alpha),
-                linewidth=val_width,
-            )
-
-            ax2.plot(
-                np.arange(pre_train, len(train_loss)),
-                train_loss[pre_train:],
-                "-",
-                label=f"{name} Train ({alpha})",
-                color=get_col(train_low, train_high, alpha),
-            )
-
-            ax2.plot(
-                np.arange(pre_train, len(val_loss)),
-                val_loss[pre_train:],
-                "--",
-                label=f"{name} Val. ({alpha})",
-                color=get_col(val_low, val_high, alpha),
-                linewidth=val_width,
-            )
-
-            ax3.plot(
-                reg_loss,
-                "-",
-                label=f"{name} Reg. ({alpha})",
-                color=get_col(train_low, train_high, alpha),
-            )
-
-        ax1.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.1),
-            fancybox=True,
-            shadow=True,
-            ncol=2,
-        )
-        ax2.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.1),
-            fancybox=True,
-            shadow=True,
-            ncol=3,
-        )
-        ax3.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.1),
-            fancybox=True,
-            shadow=True,
-            ncol=3,
+        axs["Pre. Loss"].plot(
+            np.arange(1, PRE_TRAIN + 1),
+            val_loss_cur[:PRE_TRAIN],
+            linestyle="-.",
+            color=val_pre,
+            alpha=opacity,
         )
 
-        plt.tight_layout()
-        plt.savefig(
-            os.path.join(common_path, dir_name, "_loss_plot.pdf"), bbox_inches="tight"
+        # Plot full train loss
+        # Plot loss functions
+        axs["Full Loss"].plot(
+            np.arange(PRE_TRAIN + 1, EPOCHS + 1),
+            train_loss_cur[PRE_TRAIN:],
+            linestyle="-",
+            color=train_full,
+            alpha=opacity,
         )
+        axs["Full Loss"].plot(
+            np.arange(PRE_TRAIN + 1, EPOCHS + 1),
+            val_loss_cur[PRE_TRAIN:],
+            linestyle=(0, (5, 1)),
+            color=val_full,
+            alpha=opacity,
+        )
+
+        # Plot Reg. loss
+        axs["Reg. Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            reg_loss_cur,
+            linestyle="-",
+            color=train_full,
+            alpha=opacity,
+        )
+
+        # Separate folders for models fully trained and only pre-trained
+        for train_idx, (
+            embedder_name,
+            train_specific_rdms,
+            train_col,
+            val_col,
+            train_line,
+            val_line,
+        ) in enumerate(
+            zip(
+                ["lowest_val_loss", "lowest_val_loss_pre_train"],
+                [full_rdms, pre_rdms],
+                [train_full, train_pre],
+                [val_full, val_pre],
+                ["-", (0, (1, 1))],
+                [(0, (5, 1)), "-."],
+            )
+        ):
+            # First load embedder
+            model.load_state_dict(
+                torch.load(
+                    os.path.join(model_path, "embedder", seed_dir, embedder_name)
+                )["model_state_dict"]
+            )
+            model.eval()
+
+            # Generate data
+            reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
+            embeddings = model(reshaped_eeg)[2].detach()
+
+            # Turn output into RDM and save it
+            output_rdms = create_rdms(torch.squeeze(embeddings))
+            train_specific_rdms[idx] = output_rdms - kin_rdms
+
+    train_loss = np.mean(train_loss, axis=0)
+    val_loss = np.mean(val_loss, axis=0)
+    reg_loss = np.mean(reg_loss, axis=0)
+
+    # Plot pre-train loss functions
+    axs["Pre. Loss"].plot(
+        np.arange(1, PRE_TRAIN + 1),
+        train_loss[:PRE_TRAIN],
+        linestyle=(0, (1, 1)),
+        color=train_pre,
+        label="Train Loss",
+    )
+    axs["Pre. Loss"].plot(
+        np.arange(1, PRE_TRAIN + 1),
+        val_loss[:PRE_TRAIN],
+        linestyle="-.",
+        color=val_pre,
+        label="Val Loss",
+    )
+
+    # Plot full train loss
+    # Plot loss functions
+    axs["Full Loss"].plot(
+        np.arange(PRE_TRAIN + 1, EPOCHS + 1),
+        train_loss[PRE_TRAIN:],
+        linestyle="-",
+        color=train_full,
+        label="Train Loss",
+    )
+    axs["Full Loss"].plot(
+        np.arange(PRE_TRAIN + 1, EPOCHS + 1),
+        val_loss[PRE_TRAIN:],
+        linestyle=(0, (5, 1)),
+        color=val_full,
+        label="Val Loss",
+    )
+
+    # Plot Reg. loss
+    axs["Reg. Loss"].plot(
+        np.arange(1, EPOCHS + 1),
+        reg_loss,
+        linestyle="-",
+        color=train_full,
+        label="Reg. Loss",
+    )
+
+    axs["Pre. Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    axs["Full Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    axs["Reg. Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    # Plot and annotate rdm heatmap
+    rdm_im = axs["Pre. RDM"].imshow(
+        np.mean(
+            pre_rdms.reshape(
+                (
+                    len(seed_dirs) * kin_rdms.shape[0],
+                    kin_rdms.shape[1],
+                    kin_rdms.shape[2],
+                ),
+            ),
+            axis=0,
+        )
+    )
+
+    cbar = axs["Pre. RDM"].figure.colorbar(rdm_im, ax=axs["Pre. RDM"])
+    cbar.ax.set_ylabel("Mean Distance to Kin. RDM", rotation=-90, va="bottom")
+
+    axs["Pre. RDM"].set_xticks(np.arange(0, 12), labels=np.arange(1, 13))
+    axs["Pre. RDM"].set_yticks(np.arange(0, 12), np.arange(1, 13))
+
+    rdm_im = axs["Full RDM"].imshow(
+        np.mean(
+            full_rdms.reshape(
+                (
+                    len(seed_dirs) * kin_rdms.shape[0],
+                    kin_rdms.shape[1],
+                    kin_rdms.shape[2],
+                ),
+            ),
+            axis=0,
+        )
+    )
+
+    cbar = axs["Full RDM"].figure.colorbar(rdm_im, ax=axs["Full RDM"])
+    cbar.ax.set_ylabel("Mean Distance to Kin. RDM", rotation=-90, va="bottom")
+
+    axs["Full RDM"].set_xticks(np.arange(0, 12), labels=np.arange(1, 13))
+    axs["Full RDM"].set_yticks(np.arange(0, 12), np.arange(1, 13))
+
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(os.path.join(model_path, "_loss_plot.pdf"), bbox_inches="tight")
 
 
 def plot_reconstruction_and_error(
     model_path: str,
     eeg_data: torch.Tensor,
     kin_data: torch.Tensor,
-    model: torch.nn.Module,
+    embedder: torch.nn.Module,
 ):
+    """
 
-    file_name = "lowest_val_loss.zip"
+    @param model_path: The path to the model ("./models/mlp_emb_kin/001")
+    @param eeg_data: Expected to be of shape [1, 6, 12, 16, 200], i.e. one participants entire data.
+    @param kin_data: Expected to be of shape [1, 6, 12, 19, 200], i.e. one participants entire data.
+    @param embedder: A created architecture to-be-used for embeddings
+    @return: None.
+    """
+
+    # Plot parameters
     opacity = 0.1
 
-    model_low = np.array([1, 0.7, 0])
-    model_high = np.array([0.5, 0, 1])
+    train_full = np.array([1, 0.7, 0])
+    train_pre = np.array([0.5, 0, 1])
 
+    val_full = np.array([0.2, 1, 0])
+    val_pre = np.array([1, 0.2, 0.6])
+
+    # To quickly swap which channel to show reconstruction of
     kinematics_channel = 6
 
-    version_dirs = get_subdirs(model_path)
-    latest = sorted(version_dirs)[-1]
+    # I want to create a 4 part plot: Reconstruction (5/6), NRMSE Boxplot (1/6)
+    #                                 Loss Plot (3/6)     , Reg. Loss Plot (3/6)
 
-    # Initialize plot per model
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6), width_ratios=(5, 2))
-    name = model_path.split("/")[-1].upper().split("_")[0]
-    fig.suptitle(f"Loss Values of {name}")
+    # Initialize plot
+    fig, axs = plt.subplot_mosaic(
+        [
+            [
+                "Reconstruction",
+                "Reconstruction",
+                "Reconstruction",
+                "Reconstruction",
+                "Reconstruction",
+                "NRMSE",
+            ],
+            ["Loss", "Loss", "Loss", "Reg. Loss", "Reg. Loss", "Reg. Loss"],
+        ],
+        figsize=(15, 6),
+    )
+    name = model_path.split("/")[2].upper().split("_")[0]
+    fig.suptitle(f"Predictor Trained on {name}")
 
-    ax1.set_title(f"Reconstruction of Channel {kinematics_channel}")
-    ax2.set_title("Error")
+    axs["Reconstruction"].set_title(f"Reconstruction of Channel {kinematics_channel}")
+    axs["NRMSE"].set_title("Val. Error")
+    axs["Loss"].set_title("Train/Val. Loss")
+    axs["Reg. Loss"].set_title("Reg. Loss")
 
-    ax1.set_ylabel("Amplitude")
-    ax2.set_ylabel("NRMSE")
+    axs["Reconstruction"].set_ylabel("Amplitude")
+    axs["NRMSE"].set_ylabel("NRMSE")
+    axs["Loss"].set_ylabel("Loss")
+    axs["Reg. Loss"].set_ylabel("Loss")
 
-    ax1.set_xlabel("Time (ms)")
-    ax2.set_xlabel("Alpha")
+    axs["Reconstruction"].set_xlabel("Time (ms)")
+    axs["NRMSE"].set_xlabel("Trained")
+    axs["Loss"].set_xlabel("Epoch")
+    axs["Reg. Loss"].set_xlabel("Epoch")
 
-    ax1.plot(
+    # Plot original data, true output, first grasp phase, with label
+    axs["Reconstruction"].plot(
         np.arange(
             kin_data.shape[-1] * 0,
             kin_data.shape[-1] * (0 + 1),
@@ -268,8 +405,9 @@ def plot_reconstruction_and_error(
         label="Goal",
     )
 
+    # Graph other grasp phases without label to avoid overcrowding the legend
     for idx in range(1, kin_data.shape[0]):
-        ax1.plot(
+        axs["Reconstruction"].plot(
             np.arange(
                 kin_data.shape[-1] * idx,
                 kin_data.shape[-1] * (idx + 1),
@@ -279,98 +417,216 @@ def plot_reconstruction_and_error(
             color="k",
         )
 
-    alpha_dirs = get_subdirs(os.path.join(model_path, latest))
+    # To collect for Boxplot, s.t. x = dict.keys(), y = dict.values()
+    nrmse_data = np.zeros((2, len(get_subdirs(os.path.join(model_path, "predictor")))))
 
-    nrmse_data = {}
+    # Separate folders for models fully trained and only pre-trained
+    for train_idx, (
+        train_folder,
+        embedder_name,
+        train_col,
+        val_col,
+        train_line,
+        val_line,
+    ) in enumerate(
+        zip(
+            ["full_train", "pre_train"],
+            ["lowest_val_loss", "lowest_val_loss_pre_train"],
+            [train_full, train_pre],
+            [val_full, val_pre],
+            ["-", (0, (1, 1))],
+            [(0, (5, 1)), "-."],
+        )
+    ):
+        train_name = " ".join(train_folder.capitalize().split("_"))
 
-    for alpha_dir in alpha_dirs:
-        seed_dirs = get_subdirs(os.path.join(model_path, latest, alpha_dir))
+        seed_dirs = get_subdirs(os.path.join(model_path, "predictor"))
 
-        alpha = int(alpha_dir[2:]) / 10
-        alpha_outputs = np.empty((5, *kin_data.shape))
+        # Track all outputs per train state to average over them later
+        train_specific_outputs = np.zeros((len(seed_dirs), *kin_data.shape))
 
+        # Track losses over trainings
+        train_loss = np.zeros((len(seed_dirs), EPOCHS))
+        val_loss = np.zeros((len(seed_dirs), EPOCHS))
+        reg_loss = np.zeros((len(seed_dirs), EPOCHS))
+
+        # Load models for all seeds
         for idx, seed_dir in enumerate(seed_dirs):
-            model.load_state_dict(
+            # First load embedder
+            embedder.load_state_dict(
+                torch.load(
+                    os.path.join(model_path, "embedder", seed_dir, embedder_name)
+                )["model_state_dict"]
+            )
+            embedder.eval()
+
+            # Generate data for predictor
+            reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
+
+            embeddings = embedder(reshaped_eeg)[2].detach()
+
+            # Load predictor
+            predictor = Predictor(19)
+            predictor.load_state_dict(
                 torch.load(
                     os.path.join(
                         model_path,
-                        latest,
-                        alpha_dir,
+                        "predictor",
                         seed_dir,
-                        file_name,
+                        train_folder,
+                        "lowest_val_loss",
                     ),
                 )["model_state_dict"]
             )
+            predictor.eval()
 
-            model.eval()
-            model_outputs = np.squeeze(model(eeg_data)[-1].detach().numpy())
+            # And get output data
+            model_outputs = predictor(embeddings).detach().numpy()
+            train_specific_outputs[idx] = model_outputs
 
-            alpha_outputs[idx] = model_outputs
-
+            # Plot seed specific data without label and opaque
             for idx_2 in range(model_outputs.shape[0]):
-                ax1.plot(
+                axs["Reconstruction"].plot(
                     np.arange(
                         model_outputs.shape[-1] * idx_2,
                         model_outputs.shape[-1] * (idx_2 + 1),
                     ),
                     model_outputs[idx_2, 0, kinematics_channel],
-                    "-",
-                    color=get_col(model_low, model_high, alpha),
+                    linestyle=val_line,
+                    color=val_col,
                     alpha=opacity,
                 )
 
-            nrmse_data[alpha] = nrmse_data.get(alpha, [])
-
-            nrmse_data[alpha].append(
-                compute_nrmse(torch.Tensor(model_outputs), kin_data)
+            # Save nrmse
+            nrmse_data[train_idx, idx] = compute_nrmse(
+                torch.Tensor(model_outputs), kin_data
             )
 
-        alpha_outputs = np.mean(alpha_outputs, axis=0)
+            # Get loss values
+            with open(
+                os.path.join(
+                    model_path,
+                    "predictor",
+                    seed_dir,
+                    train_folder,
+                    "data.txt",
+                ),
+                "r",
+            ) as f:
+                lines = f.readlines()
 
-        ax1.plot(
-            np.arange(
-                alpha_outputs.shape[-1] * 0,
-                alpha_outputs.shape[-1] * (0 + 1),
-            ),
-            alpha_outputs[0, 0, kinematics_channel],
-            "-",
-            label=f"{name} Rec. ({alpha})",
-            color=get_col(model_low, model_high, alpha),
+            train_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "T"])
+            val_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "V"])
+            reg_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "R"])
+
+            train_loss[idx] = train_loss_cur
+            val_loss[idx] = val_loss_cur
+            reg_loss[idx] = reg_loss_cur
+
+            # Plot loss functions
+            axs["Loss"].plot(
+                np.arange(1, EPOCHS + 1),
+                train_loss_cur,
+                linestyle=train_line,
+                color=train_col,
+                alpha=opacity,
+            )
+            axs["Loss"].plot(
+                np.arange(1, EPOCHS + 1),
+                val_loss_cur,
+                linestyle=val_line,
+                color=val_col,
+                alpha=opacity,
+            )
+            axs["Reg. Loss"].plot(
+                np.arange(1, EPOCHS + 1),
+                reg_loss_cur,
+                linestyle=train_line,
+                color=train_col,
+                alpha=opacity,
+            )
+
+        # Plot mean losses
+        axs["Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            np.mean(train_loss, axis=0),
+            linestyle=train_line,
+            label=f"Train Loss ({train_name})",
+            color=train_col,
+        )
+        axs["Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            np.mean(val_loss, axis=0),
+            linestyle=val_line,
+            label=f"Val. Loss ({train_name})",
+            color=val_col,
+        )
+        axs["Reg. Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            np.mean(reg_loss, axis=0),
+            linestyle=train_line,
+            label=f"Reg. Loss ({train_name})",
+            color=train_col,
         )
 
-        for idx_3 in range(1, alpha_outputs.shape[0]):
-            ax1.plot(
+        train_specific_outputs = np.mean(train_specific_outputs, axis=0)
+
+        axs["Reconstruction"].plot(
+            np.arange(
+                train_specific_outputs.shape[-1] * 0,
+                train_specific_outputs.shape[-1] * (0 + 1),
+            ),
+            train_specific_outputs[0, 0, kinematics_channel],
+            linestyle=val_line,
+            label=f"{name} Rec. ({train_name})",
+            color=val_col,
+        )
+
+        for idx_3 in range(1, train_specific_outputs.shape[0]):
+            axs["Reconstruction"].plot(
                 np.arange(
-                    alpha_outputs.shape[-1] * idx_3,
-                    alpha_outputs.shape[-1] * (idx_3 + 1),
+                    train_specific_outputs.shape[-1] * idx_3,
+                    train_specific_outputs.shape[-1] * (idx_3 + 1),
                 ),
-                alpha_outputs[idx_3, 0, kinematics_channel],
-                "-",
-                color=get_col(model_low, model_high, alpha),
+                train_specific_outputs[0, 0, kinematics_channel],
+                linestyle=val_line,
+                color=val_col,
             )
 
-    ax2.violinplot(
-        nrmse_data.values(),
+    axs["NRMSE"].boxplot(
+        nrmse_data.T,
         vert=True,
-        showmeans=True,
-        showextrema=True,
-        showmedians=False,
-        quantiles=None,
     )
 
-    ax2.set_xticks(np.arange(1, len(nrmse_data) + 1), labels=nrmse_data.keys())
+    axs["NRMSE"].set_xticks(np.arange(1, len(nrmse_data) + 1), labels=["Fully", "Pre"])
 
-    ax1.legend(
+    axs["Reconstruction"].legend(
         loc="upper center",
-        bbox_to_anchor=(0.5, -0.1),
+        bbox_to_anchor=(0.5, -0.4),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    axs["Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.4),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    axs["Reg. Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.4),
         fancybox=True,
         shadow=True,
         ncol=2,
     )
 
     plt.tight_layout()
-    plt.show()
-    # plt.savefig(os.path.join(model_path, "_rec_plot.pdf"), bbox_inches="tight")
+    # plt.show()
+    plt.savefig(os.path.join(model_path, "_rec_plot.pdf"), bbox_inches="tight")
 
 
 def plot_rdms(
@@ -490,40 +746,6 @@ def compute_nrmse(output: torch.Tensor, goal: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(torch.mean(torch.pow(output - goal, 2))) / (
         torch.max(goal) - torch.min(goal)
     )
-
-
-def compute_rnn_rdms(network_path: str, data: DataConstruct) -> torch.Tensor:
-    """Computes Autoencoder Embedder's RDMs of passed data.
-
-    @param network_path: Path to the folder of saved networks.
-    @param data: Data of which RDMs should created.
-    @return: 3D tensor of shape [Participants + Grasp phase x Conditions x Conditions)
-    """
-    net = get_rnn_rdm_network(network_path, data.shape[-2])
-    middle_data = torch.as_tensor(data).transpose(3, 4)
-    rnn_data = rnn_reshaping(middle_data)
-    states, _ = net(rnn_data)
-    return create_rdms(torch.squeeze(rnn_unshaping(states, middle_data.shape)))
-
-
-def _compute_network_rdms(
-    network: torch.nn.Module, data: DataConstruct
-) -> torch.Tensor:
-    """Computes network output given some data and a network instance. Since most networks automatically generate RDMs,
-        network output and RDM generation are assumed to be equivalent.
-
-    @param network: Instance of the network to generate output from.
-    @param data: Data to be used for network evaluation.
-    @return: Network output.
-    """
-    network.eval()
-    return network(torch.as_tensor(data))
-
-
-def get_outputs(network_path, network_instance, data) -> torch.Tensor:
-    network_instance.load_state_dict(torch.load(network_path)["model_state_dict"])
-    network_instance.eval()
-    return network_instance(torch.as_tensor(data))[-1]
 
 
 if __name__ == "__main__":
