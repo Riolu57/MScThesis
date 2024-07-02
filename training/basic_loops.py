@@ -16,6 +16,8 @@ from networks.mlp_emb_kin import MlpEmbKin
 from networks.cnn_emb_kin import CnnEmbKin
 from networks.predictor import Predictor
 
+from data.rdms import create_rdms
+
 
 def nn_train_loop(
     path: str,
@@ -135,21 +137,25 @@ def nn_test_loop(
 
 
 def classic_training_loop(
-    base_embedder: BaseEstimator, eeg_data: NDArray, kin_rdms: NDArray
+    base_embedder: BaseEstimator,
+    eeg_data: NDArray,
+    kin_rdms: NDArray,
+    fitting_data: [None | NDArray],
 ) -> Tuple[float, NDArray]:
     """Uses a scikit learn method to compress/embedd data and train in with as much data as possible, then computes loss and training RDMs.
 
     @param base_embedder: A scikit-learn method implementing .fit() and .transform(), compressing from (X, X) to (X, 1).
     @param eeg_data: EEG data of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
     @param kin_rdms: Pre-computed kinematics RDMs to compare against.
+    @param fitting_data: the data which will be embedded and returned. If None, eeg_data will be fit and returned.
     @return: A training loss value and training RDMs of the employed method.
     """
     # Save time series locally, then compute rdms for participants
     accumulated_data = torch.empty(
         (
-            eeg_data.shape[0] * eeg_data.shape[1],
-            eeg_data.shape[2],
-            eeg_data.shape[4],
+            fitting_data.shape[0] * fitting_data.shape[1],
+            fitting_data.shape[2],
+            fitting_data.shape[4],
         )
     )
 
@@ -164,9 +170,9 @@ def classic_training_loop(
                 )
 
                 # Afterwards transform per participant and create RDM
-                for subject_idx in range(eeg_data.shape[0]):
+                for subject_idx in range(fitting_data.shape[0]):
                     accumulated_data[
-                        subject_idx * eeg_data.shape[1] + phase_idx,
+                        subject_idx * fitting_data.shape[1] + phase_idx,
                         condition_idx,
                         time_idx,
                     ] = torch.as_tensor(
@@ -179,10 +185,20 @@ def classic_training_loop(
 
     assert torch.any(torch.isnan(accumulated_data)).item() is False
 
-    accumulated_data = create_rdms(accumulated_data)
+    accumulated_rdms = create_rdms(accumulated_data)
 
     loss = np.array([])
-    for mat_eeg, mat_kin in zip(accumulated_data, kin_rdms):
+    for mat_eeg, mat_kin in zip(accumulated_rdms, kin_rdms):
         loss = np.append(loss, fro_loss(mat_eeg, mat_kin))
 
-    return loss, accumulated_data
+    return (
+        loss,
+        accumulated_data.reshape(
+            fitting_data.shape[0],
+            fitting_data.shape[1],
+            fitting_data.shape[2],
+            1,
+            fitting_data.shape[4],
+        ),
+        accumulated_rdms,
+    )

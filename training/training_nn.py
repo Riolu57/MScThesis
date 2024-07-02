@@ -14,13 +14,19 @@ from util.network_loading import _get_inference_network
 from networks.predictor import Predictor
 from util.paths import get_subdirs
 
-from data.datasets import prepare_eeg_rdm_data, prepare_model_emb_kin_data
+from data.datasets import (
+    prepare_eeg_rdm_data,
+    prepare_model_emb_kin_data,
+    prepare_classical_emb_kin_data,
+)
 
 from torch.utils.data import DataLoader
 import torch
 
 import numpy as np
 import random
+
+from sklearn.base import BaseEstimator
 
 
 def train_network(
@@ -205,6 +211,51 @@ def train_network_predictor(
             save_path = os.path.join(model_path, "predictor", str(seed), "full_train")
 
         data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
+
+        train_network(
+            Predictor(19),
+            torch.nn.MSELoss(),
+            data,
+            int(seed),
+            save_path,
+            epochs,
+            learning_rate,
+            alpha,
+            False,
+            empty_loss,
+        )
+
+
+def train_classical_predictor(
+    model: BaseEstimator,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
+    model_path: str,
+    path_to_seeds: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param model: The model which will be loaded; architecture must be equivalent.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
+    @param model_path: Path where the model should be saved.
+    @param path_to_seeds: Path to superfolder of model seeds, such that they can be used here too.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param pre_trained_only: Determines whether to use the pre-trained or fully trained model.
+    @return: None.
+    """
+
+    seeds = get_subdirs(path_to_seeds)
+
+    for seed in seeds:
+        save_path = os.path.join(model_path, "predictor", str(seed), "full_train")
+
+        data = prepare_classical_emb_kin_data(eeg_data, kin_data, model)
 
         train_network(
             Predictor(19),

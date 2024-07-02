@@ -5,7 +5,9 @@ from training.basic_loops import classic_training_loop
 from sklearn.decomposition import PCA, FastICA
 
 
-def ana_ica(eeg_data_training: NDArray, kin_rdms: NDArray) -> Tuple[float, NDArray]:
+def ana_ica(
+    eeg_data_training: NDArray, kin_rdms: NDArray, fitting_data: NDArray
+) -> Tuple[float, NDArray]:
     """Computes ICA on the passed EEG data and returns a training loss and RDMs based on the passed RDMs and embeddings respectively.
     @param eeg_data_training: The EEG data to be trained on. The data is expected to be of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
     @param kin_rdms: The target RDMs.
@@ -22,10 +24,13 @@ def ana_ica(eeg_data_training: NDArray, kin_rdms: NDArray) -> Tuple[float, NDArr
         ),
         eeg_data_training,
         kin_rdms,
+        fitting_data,
     )
 
 
-def ana_pca(eeg_data_training: NDArray, kin_rdms: NDArray) -> Tuple[float, NDArray]:
+def ana_pca(
+    eeg_data_training: NDArray, kin_rdms: NDArray, fitting_data: NDArray
+) -> Tuple[float, NDArray]:
     """Computes PCA on the passed EEG data and returns a training loss and RDMs based on the passed RDMs and embeddings respectively.
     @param eeg_data_training: The EEG data to be trained on. The data is expected to be of 5 dimensions: (Participants x Grasp phase x Condition x Channels x Time Points)
     @param kin_rdms: The target RDMs.
@@ -36,4 +41,5 @@ def ana_pca(eeg_data_training: NDArray, kin_rdms: NDArray) -> Tuple[float, NDArr
         PCA(n_components=1, copy=True, whiten=False, svd_solver="full"),
         eeg_data_training,
         kin_rdms,
+        fitting_data,
     )
