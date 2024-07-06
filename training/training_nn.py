@@ -36,7 +36,7 @@ def train_network(
     seed: int,
     model_path: str,
     epochs: int,
-    learning_rate: float,
+    learning_rate: [Callable | float],
     alpha: float,
     pre_train: int,
     pre_train_loss_func: Callable,
@@ -51,7 +51,7 @@ def train_network(
     @param learning_rate: The learning rate; used for ADAM optimizer.
     @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
     @param pre_train: The number of epochs to only train the output and not embedding.
-    @param pre_train_loss: The pre-train loss function.
+    @param pre_train_loss_func: The pre-train loss function.
     @return: None.
     """
     # Make sure that files and folder exist properly
@@ -70,7 +70,15 @@ def train_network(
     val_loader = DataLoader(datasets[1], batch_size=3, shuffle=True)
     test_loader = DataLoader(datasets[2], batch_size=3, shuffle=True)
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    if isinstance(learning_rate, float):
+        optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    elif isinstance(learning_rate, type(lambda: None)):
+        optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(
+            optimizer=optimizer, lr_lambda=learning_rate, last_epoch=-1
+        )
+    else:
+        raise NotImplementedError("Please implement this type of learning rate.")
 
     lowest_loss = np.infty
     lowest_pre_loss = np.infty
@@ -128,6 +136,9 @@ def train_network(
                 print(
                     f"{pcolors.BOLD}Time Estimate (Train): {int(min)}m {int(sec)}s{pcolors.ENDC}"
                 )
+
+        if isinstance(learning_rate, type(lambda: None)):
+            scheduler.step()
 
 
 def train_eeg_emb(
@@ -193,37 +204,59 @@ def train_network_predictor(
     @return: None.
     """
 
-    embedder_path = os.path.join(model_path, "embedder")
+    if pre_trained_only:
+        embedder_path = os.path.join(model_path, "embedder_kl")
+        seeds = get_subdirs(embedder_path)
 
-    seeds = get_subdirs(embedder_path)
-
-    for seed in seeds:
-        seed_path = os.path.join(embedder_path, str(seed))
-        if pre_trained_only:
+        for seed in seeds:
+            seed_path = os.path.join(embedder_path, str(seed))
             _get_inference_network(
                 os.path.join(seed_path, "lowest_val_loss_pre_train"),
                 model,
             )
-            save_path = os.path.join(model_path, "predictor", str(seed), "pre_train")
+            save_path = os.path.join(model_path, "predictor", str(seed), "kl_train")
 
-        else:
-            _get_inference_network(os.path.join(seed_path, "lowest_val_loss"), model)
+            data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
+
+            train_network(
+                Predictor(19),
+                torch.nn.MSELoss(),
+                data,
+                int(seed),
+                save_path,
+                epochs,
+                learning_rate,
+                alpha,
+                False,
+                empty_loss,
+            )
+
+    else:
+        embedder_path = os.path.join(model_path, "embedder")
+        seeds = get_subdirs(embedder_path)
+
+        for seed in seeds:
+            seed_path = os.path.join(embedder_path, str(seed))
+            _get_inference_network(
+                os.path.join(seed_path, "lowest_val_loss"),
+                model,
+            )
             save_path = os.path.join(model_path, "predictor", str(seed), "full_train")
 
-        data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
+            data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
-        train_network(
-            Predictor(19),
-            torch.nn.MSELoss(),
-            data,
-            int(seed),
-            save_path,
-            epochs,
-            learning_rate,
-            alpha,
-            False,
-            empty_loss,
-        )
+            train_network(
+                Predictor(19),
+                torch.nn.MSELoss(),
+                data,
+                int(seed),
+                save_path,
+                epochs,
+                learning_rate,
+                alpha,
+                False,
+                empty_loss,
+            )
 
 
 def train_classical_predictor(

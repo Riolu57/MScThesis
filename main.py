@@ -12,8 +12,10 @@ from CONFIG import (
     KIN_DATA_PATH,
     EPOCHS,
     LEARNING_RATE,
-    ALPHA,
+    ALPHA_EMBEDDER,
+    ALPHA_PREDICTOR,
     PRE_TRAIN,
+    PREDICTOR_LEARNING_RATE_SCHEDULE,
 )
 from training.training_nn import (
     train_eeg_emb,
@@ -37,7 +39,7 @@ from networks.cnn_emb_kin import CnnEmbKin
 torch.backends.cudnn.deterministic = True
 
 
-def train_models(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alpha):
+def train_embedders(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alpha):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -76,6 +78,40 @@ def train_models(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alp
                     f.write("COLLAPSED")
 
                 continue
+
+
+def train_kl_only_models(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+
+    gen = np.random.default_rng(seed)
+
+    torch.autograd.set_detect_anomaly(True)
+
+    mlp_emb_kin_path = "./models/mlp_emb_kin/001"
+    rnn_emb_kin_path = "./models/rnn_emb_kin/001"
+    cnn_emb_kin_path = "./models/cnn_emb_kin/001"
+
+    eeg_data, kin_data = load_all_data(eeg_path, kin_path)
+
+    for new_seed in gen.integers(0, int("9" * (len(str(seed)))), 5):
+        new_seed = int(new_seed)
+        for model, model_path in zip(
+            [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+            [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
+        ):
+            train_eeg_emb(
+                new_seed,
+                model,
+                eeg_data,
+                kin_data,
+                f"{model_path}/embedder_kl/{new_seed}",
+                epochs,
+                epochs,
+                learning_rate,
+                alpha,
+            )
 
 
 def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
@@ -162,13 +198,32 @@ def plot_results(eeg_path, kin_path):
     plot_loss("./training/models")
 
 
-def main(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alpha):
-    train_models(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, alpha)
-
-
 if __name__ == "__main__":
-    # main(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, PRE_TRAIN, LEARNING_RATE, ALPHA)
-    # train_predictors(SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA)
+    # train_embedders(
+    #     SEED,
+    #     EEG_DATA_PATH,
+    #     KIN_DATA_PATH,
+    #     EPOCHS,
+    #     PRE_TRAIN,
+    #     LEARNING_RATE,
+    #     ALPHA_EMBEDDER,
+    # )
+    # train_kl_only_models(
+    #     SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA_EMBEDDER
+    # )
+    # train_predictors(
+    #     SEED,
+    #     EEG_DATA_PATH,
+    #     KIN_DATA_PATH,
+    #     EPOCHS,
+    #     PREDICTOR_LEARNING_RATE_SCHEDULE,
+    #     ALPHA_PREDICTOR,
+    # )
     train_classical_and_predictor(
-        SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA
+        SEED,
+        EEG_DATA_PATH,
+        KIN_DATA_PATH,
+        EPOCHS,
+        PREDICTOR_LEARNING_RATE_SCHEDULE,
+        ALPHA_PREDICTOR,
     )

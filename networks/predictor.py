@@ -21,8 +21,11 @@ class Predictor(nn.Module):
             nn.ReLU(),
             nn.Linear(20, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
-            nn.Linear(20, self.out_dim, dtype=DTYPE_TORCH),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),
+            nn.Linear(20, 20, dtype=DTYPE_TORCH),
+            nn.ReLU(),
+            nn.Linear(20, self.out_dim, dtype=DTYPE_TORCH),
         )
 
     @staticmethod
