@@ -45,7 +45,210 @@ def normalize_list(val_list: Iterable, normalization_constant: float) -> list:
     return [i / normalization_constant for i in val_list]
 
 
-def plot_loss(
+def plot_loss_kl(
+    model_path: str,
+    eeg_data: torch.Tensor,
+    kin_rdms: torch.Tensor,
+    model: torch.nn.Module,
+) -> None:
+    """Plots loss functions of all networks saved in the directory. Expects to find models inside of subfolders.
+
+    @param common_path: Superpath of folders containing models.
+    @return: None.
+    """
+    # Iterate through different models and subfolders to get last version
+    opacity = 0.2
+
+    train_full = np.array([1, 0.7, 0])
+
+    val_full = np.array([0.2, 1, 0])
+
+    # Initialize plot
+    fig, axs = plt.subplot_mosaic(
+        [
+            [
+                "Full Loss",
+                "Full Loss",
+                "Full Loss",
+                "Full Loss",
+                "Full Loss",
+                "Full Loss",
+            ],
+            [
+                "Reg. Loss",
+                "Reg. Loss",
+                "Reg. Loss",
+                "Reg. Loss",
+                "Full RDM",
+                "Full RDM",
+            ],
+        ],
+        figsize=(15, 9),
+    )
+    name = model_path.split("/")[2].upper().split("_")[0]
+    fig.suptitle(f"{name} Embedder (KL)")
+
+    axs["Full Loss"].set_title("Full Loss")
+    axs["Reg. Loss"].set_title("Reg. Loss")
+    axs["Full RDM"].set_title("Full RDM")
+
+    axs["Full Loss"].set_ylabel("log(Loss)")
+    axs["Reg. Loss"].set_ylabel("Loss")
+    axs["Full RDM"].set_ylabel("Condition")
+
+    axs["Full Loss"].set_xlabel("Epoch")
+    axs["Reg. Loss"].set_xlabel("Epoch")
+    axs["Full RDM"].set_xlabel("Condition")
+
+    axs["Full Loss"].set_yscale("log")
+
+    seed_dirs = get_subdirs(os.path.join(model_path, "embedder_kl"))
+
+    full_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
+
+    # Track losses over trainings
+    train_loss = np.zeros((len(seed_dirs), EPOCHS))
+    val_loss = np.zeros((len(seed_dirs), EPOCHS))
+    reg_loss = np.zeros((len(seed_dirs), EPOCHS))
+
+    # Load models for all seeds
+    for idx, seed_dir in enumerate(seed_dirs):
+        # Get loss values
+        with open(
+            os.path.join(
+                model_path,
+                "embedder_kl",
+                seed_dir,
+                "data.txt",
+            ),
+            "r",
+        ) as f:
+            lines = f.readlines()
+
+        train_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "T"])
+        val_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "V"])
+        reg_loss_cur = np.array([float(t[2:]) for t in lines if t[0] == "R"])
+
+        train_loss[idx] = train_loss_cur
+        val_loss[idx] = val_loss_cur
+        reg_loss[idx] = reg_loss_cur
+
+        # Plot full train loss
+        # Plot loss functions
+        axs["Full Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            train_loss_cur,
+            linestyle="-",
+            color=train_full,
+            alpha=opacity,
+        )
+        axs["Full Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            val_loss_cur,
+            linestyle=(0, (5, 1)),
+            color=val_full,
+            alpha=opacity,
+        )
+
+        # Plot Reg. loss
+        axs["Reg. Loss"].plot(
+            np.arange(1, EPOCHS + 1),
+            reg_loss_cur,
+            linestyle="-",
+            color=train_full,
+            alpha=opacity,
+        )
+
+        # First load embedder
+        model.load_state_dict(
+            torch.load(
+                os.path.join(
+                    model_path, "embedder_kl", seed_dir, "lowest_val_loss_pre_train"
+                )
+            )["model_state_dict"]
+        )
+        model.eval()
+
+        # Generate data
+        reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
+        embeddings = model(reshaped_eeg)[2].detach()
+
+        # Turn output into RDM and save it
+        output_rdms = create_rdms(torch.squeeze(embeddings))
+        full_rdms[idx] = output_rdms - kin_rdms
+
+    train_loss = np.mean(train_loss, axis=0)
+    val_loss = np.mean(val_loss, axis=0)
+    reg_loss = np.mean(reg_loss, axis=0)
+
+    # Plot full train loss
+    # Plot loss functions
+    axs["Full Loss"].plot(
+        np.arange(1, EPOCHS + 1),
+        train_loss,
+        linestyle="-",
+        color=train_full,
+        label="Train Loss",
+    )
+    axs["Full Loss"].plot(
+        np.arange(1, EPOCHS + 1),
+        val_loss,
+        linestyle=(0, (5, 1)),
+        color=val_full,
+        label="Val Loss",
+    )
+
+    # Plot Reg. loss
+    axs["Reg. Loss"].plot(
+        np.arange(1, EPOCHS + 1),
+        reg_loss,
+        linestyle="-",
+        color=train_full,
+        label="Reg. Loss",
+    )
+
+    axs["Full Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    axs["Reg. Loss"].legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.15),
+        fancybox=True,
+        shadow=True,
+        ncol=2,
+    )
+
+    # Plot and annotate rdm heatmap
+    rdm_im = axs["Full RDM"].imshow(
+        np.mean(
+            full_rdms.reshape(
+                (
+                    len(seed_dirs) * kin_rdms.shape[0],
+                    kin_rdms.shape[1],
+                    kin_rdms.shape[2],
+                ),
+            ),
+            axis=0,
+        )
+    )
+
+    cbar = axs["Full RDM"].figure.colorbar(rdm_im, ax=axs["Full RDM"])
+    cbar.ax.set_ylabel("Mean Distance to Kin. RDM", rotation=-90, va="bottom")
+
+    axs["Full RDM"].set_xticks(np.arange(0, 12), labels=np.arange(1, 13))
+    axs["Full RDM"].set_yticks(np.arange(0, 12), np.arange(1, 13))
+
+    plt.tight_layout()
+    # plt.show()
+    plt.savefig(os.path.join(model_path, "_loss_plot_kl.pdf"), bbox_inches="tight")
+
+
+def plot_loss_rdm(
     model_path: str,
     eeg_data: torch.Tensor,
     kin_rdms: torch.Tensor,
@@ -73,8 +276,8 @@ def plot_loss(
                 "Full Loss",
                 "Full Loss",
                 "Full Loss",
-                "Pre. RDM",
-                "Pre. RDM",
+                "Full Loss",
+                "Full Loss",
             ],
             [
                 "Reg. Loss",
@@ -88,29 +291,27 @@ def plot_loss(
         figsize=(15, 9),
     )
     name = model_path.split("/")[2].upper().split("_")[0]
-    fig.suptitle(f"{name} Embedder")
+    fig.suptitle(f"{name} Embedder (RDM)")
 
     axs["Pre. Loss"].set_title(f"Pre-Train Loss")
     axs["Full Loss"].set_title("Full Loss")
-    axs["Pre. RDM"].set_title("Pre-Train RDM")
     axs["Reg. Loss"].set_title("Reg. Loss")
     axs["Full RDM"].set_title("Full RDM")
 
     axs["Pre. Loss"].set_ylabel(f"Loss")
-    axs["Full Loss"].set_ylabel("Loss")
-    axs["Pre. RDM"].set_ylabel("Condition")
+    axs["Full Loss"].set_ylabel("log(Loss)")
     axs["Reg. Loss"].set_ylabel("Loss")
     axs["Full RDM"].set_ylabel("Condition")
 
     axs["Pre. Loss"].set_xlabel(f"Epoch")
     axs["Full Loss"].set_xlabel("Epoch")
-    axs["Pre. RDM"].set_xlabel("Condition")
     axs["Reg. Loss"].set_xlabel("Epoch")
     axs["Full RDM"].set_xlabel("Condition")
 
+    axs["Full Loss"].set_yscale("log")
+
     seed_dirs = get_subdirs(os.path.join(model_path, "embedder"))
 
-    pre_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
     full_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
 
     # Track losses over trainings
@@ -182,39 +383,21 @@ def plot_loss(
             alpha=opacity,
         )
 
-        # Separate folders for models fully trained and only pre-trained
-        for train_idx, (
-            embedder_name,
-            train_specific_rdms,
-            train_col,
-            val_col,
-            train_line,
-            val_line,
-        ) in enumerate(
-            zip(
-                ["lowest_val_loss", "lowest_val_loss_pre_train"],
-                [full_rdms, pre_rdms],
-                [train_full, train_pre],
-                [val_full, val_pre],
-                ["-", (0, (1, 1))],
-                [(0, (5, 1)), "-."],
-            )
-        ):
-            # First load embedder
-            model.load_state_dict(
-                torch.load(
-                    os.path.join(model_path, "embedder", seed_dir, embedder_name)
-                )["model_state_dict"]
-            )
-            model.eval()
+        # First load embedder
+        model.load_state_dict(
+            torch.load(
+                os.path.join(model_path, "embedder", seed_dir, "lowest_val_loss")
+            )["model_state_dict"]
+        )
+        model.eval()
 
-            # Generate data
-            reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
-            embeddings = model(reshaped_eeg)[2].detach()
+        # Generate data
+        reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
+        embeddings = model(reshaped_eeg)[2].detach()
 
-            # Turn output into RDM and save it
-            output_rdms = create_rdms(torch.squeeze(embeddings))
-            train_specific_rdms[idx] = output_rdms - kin_rdms
+        # Turn output into RDM and save it
+        output_rdms = create_rdms(torch.squeeze(embeddings))
+        full_rdms[idx] = output_rdms - kin_rdms
 
     train_loss = np.mean(train_loss, axis=0)
     val_loss = np.mean(val_loss, axis=0)
@@ -287,25 +470,6 @@ def plot_loss(
     )
 
     # Plot and annotate rdm heatmap
-    rdm_im = axs["Pre. RDM"].imshow(
-        np.mean(
-            pre_rdms.reshape(
-                (
-                    len(seed_dirs) * kin_rdms.shape[0],
-                    kin_rdms.shape[1],
-                    kin_rdms.shape[2],
-                ),
-            ),
-            axis=0,
-        )
-    )
-
-    cbar = axs["Pre. RDM"].figure.colorbar(rdm_im, ax=axs["Pre. RDM"])
-    cbar.ax.set_ylabel("Mean Distance to Kin. RDM", rotation=-90, va="bottom")
-
-    axs["Pre. RDM"].set_xticks(np.arange(0, 12), labels=np.arange(1, 13))
-    axs["Pre. RDM"].set_yticks(np.arange(0, 12), np.arange(1, 13))
-
     rdm_im = axs["Full RDM"].imshow(
         np.mean(
             full_rdms.reshape(
@@ -327,7 +491,7 @@ def plot_loss(
 
     plt.tight_layout()
     # plt.show()
-    plt.savefig(os.path.join(model_path, "_loss_plot.pdf"), bbox_inches="tight")
+    plt.savefig(os.path.join(model_path, "_loss_plot_full.pdf"), bbox_inches="tight")
 
 
 def plot_reconstruction_and_error(
