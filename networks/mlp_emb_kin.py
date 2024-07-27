@@ -7,10 +7,11 @@ import torch.nn as nn
 
 
 class MlpEmbKin(nn.Module):
-    def __init__(self, in_dim: int):
+    def __init__(self, in_dim: int, emb_dim: int = 1):
         super().__init__()
 
         self.in_dim = in_dim
+        self.emb_dim = emb_dim
 
         self.encoder = nn.Sequential(
             nn.Linear(self.in_dim, 20, dtype=DTYPE_TORCH),
@@ -24,11 +25,11 @@ class MlpEmbKin(nn.Module):
         )
 
         self.mean_head = nn.Sequential(
-            nn.Linear(10, 1, dtype=DTYPE_TORCH),
+            nn.Linear(10, self.emb_dim, dtype=DTYPE_TORCH),
         )
 
         self.var_head = nn.Sequential(
-            nn.Linear(10, 1, dtype=DTYPE_TORCH),
+            nn.Linear(10, self.emb_dim, dtype=DTYPE_TORCH),
         )
 
     @staticmethod
@@ -50,7 +51,9 @@ class MlpEmbKin(nn.Module):
         """
 
         def reparameterization(mean, var):
-            epsilon = torch.rand(data.shape[0], data.shape[1], 1, data.shape[3])
+            epsilon = torch.rand(
+                data.shape[0], data.shape[1], self.emb_dim, data.shape[3]
+            )
             z = mean + var * epsilon
             return z
 

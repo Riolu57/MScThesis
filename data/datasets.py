@@ -132,10 +132,10 @@ def prepare_classical_emb_kin_data(
         if isinstance(model, type(sklearn.decomposition.PCA(n_components=1))):
             _, embeddings, _ = ana_pca(eeg_data[0], kin_rdms, data)
         elif isinstance(model, type(sklearn.decomposition.FastICA(n_components=1))):
-            _, embeddings, _ = ana_pca(eeg_data[0], kin_rdms, data)
+            _, embeddings, _ = ana_ica(eeg_data[0], kin_rdms, data)
         else:
             raise NotImplementedError(
-                "Please impllement the proper embedding procedure for this method."
+                "Please implement the proper embedding procedure for this method."
             )
         full_eeg_data.append(adjust_5D_data(copy_as_tensor(embeddings)))
 

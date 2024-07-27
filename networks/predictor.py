@@ -7,13 +7,14 @@ import torch.nn as nn
 
 
 class Predictor(nn.Module):
-    def __init__(self, out_dim: int):
+    def __init__(self, out_dim: int, emb_dim: int = 1):
         super().__init__()
 
         self.out_dim = out_dim
+        self.emb_dim = emb_dim
 
         self.decoder = nn.Sequential(
-            nn.Linear(1, 10, dtype=DTYPE_TORCH),
+            nn.Linear(self.emb_dim, 10, dtype=DTYPE_TORCH),
             nn.ReLU(),
             nn.Linear(10, 20, dtype=DTYPE_TORCH),
             nn.ReLU(),

@@ -28,6 +28,8 @@ import random
 
 from sklearn.base import BaseEstimator
 
+from CONFIG import EMB_DIM
+
 
 def train_network(
     model: torch.nn.Module,
@@ -205,7 +207,7 @@ def train_network_predictor(
     """
 
     if pre_trained_only:
-        embedder_path = os.path.join(model_path, "embedder_kl")
+        embedder_path = os.path.join(model_path, "embedder_kl", str(EMB_DIM))
         seeds = get_subdirs(embedder_path)
 
         for seed in seeds:
@@ -214,12 +216,14 @@ def train_network_predictor(
                 os.path.join(seed_path, "lowest_val_loss_pre_train"),
                 model,
             )
-            save_path = os.path.join(model_path, "predictor", str(seed), "kl_train")
+            save_path = os.path.join(
+                model_path, "predictor", str(EMB_DIM), str(seed), "kl_train"
+            )
 
             data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
             train_network(
-                Predictor(19),
+                Predictor(19, EMB_DIM),
                 torch.nn.MSELoss(),
                 data,
                 int(seed),
@@ -232,7 +236,7 @@ def train_network_predictor(
             )
 
     else:
-        embedder_path = os.path.join(model_path, "embedder")
+        embedder_path = os.path.join(model_path, "embedder", str(EMB_DIM))
         seeds = get_subdirs(embedder_path)
 
         for seed in seeds:
@@ -241,12 +245,14 @@ def train_network_predictor(
                 os.path.join(seed_path, "lowest_val_loss"),
                 model,
             )
-            save_path = os.path.join(model_path, "predictor", str(seed), "full_train")
+            save_path = os.path.join(
+                model_path, "predictor", str(EMB_DIM), str(seed), "full_train"
+            )
 
             data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
             train_network(
-                Predictor(19),
+                Predictor(19, EMB_DIM),
                 torch.nn.MSELoss(),
                 data,
                 int(seed),

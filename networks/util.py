@@ -9,7 +9,14 @@ def get_rdms(
     data: torch.Tensor, model: torch.nn.Module
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     mean, var, embeddings = model(data)
-    rdms = create_rdms(torch.squeeze(embeddings))
+
+    new_embeddings = embeddings.reshape(
+        embeddings.shape[0],
+        embeddings.shape[1],
+        embeddings.shape[2] * embeddings.shape[3],
+    )
+    rdms = create_rdms(new_embeddings)
+
     return mean, var, rdms
 
 

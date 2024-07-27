@@ -16,6 +16,7 @@ from CONFIG import (
     ALPHA_PREDICTOR,
     PRE_TRAIN,
     PREDICTOR_LEARNING_RATE_SCHEDULE,
+    EMB_DIM,
 )
 from training.training_nn import (
     train_eeg_emb,
@@ -29,7 +30,7 @@ from data.loading import load_kinematics_data, load_eeg_data, load_all_data
 from data.rdms import create_5D_rdms
 from util.loss_vis import (
     plot_rdms,
-    plot_loss,
+    plot_loss_rdm,
 )
 
 from networks.mlp_emb_kin import MlpEmbKin
@@ -57,7 +58,7 @@ def train_embedders(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, 
     for new_seed in gen.integers(0, int("9" * (len(str(seed)))), 5):
         new_seed = int(new_seed)
         for model, model_path in zip(
-            [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+            [MlpEmbKin(16, EMB_DIM), RnnEmbKin(16, EMB_DIM), CnnEmbKin(16, EMB_DIM)],
             [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
         ):
             try:
@@ -66,7 +67,7 @@ def train_embedders(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, 
                     model,
                     eeg_data,
                     kin_data,
-                    f"{model_path}/embedder/{new_seed}",
+                    f"{model_path}/embedder/{EMB_DIM}/{new_seed}",
                     epochs,
                     pre_train,
                     learning_rate,
@@ -74,7 +75,9 @@ def train_embedders(seed, eeg_path, kin_path, epochs, pre_train, learning_rate, 
                 )
 
             except RuntimeError:
-                with open(f"{model_path}/embedder/{new_seed}/data.txt", "a+") as f:
+                with open(
+                    f"{model_path}/embedder/{EMB_DIM}/{new_seed}/data.txt", "a+"
+                ) as f:
                     f.write("COLLAPSED")
 
                 continue
@@ -98,7 +101,7 @@ def train_kl_only_models(seed, eeg_path, kin_path, epochs, learning_rate, alpha)
     for new_seed in gen.integers(0, int("9" * (len(str(seed)))), 5):
         new_seed = int(new_seed)
         for model, model_path in zip(
-            [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+            [MlpEmbKin(16, EMB_DIM), RnnEmbKin(16, EMB_DIM), CnnEmbKin(16, EMB_DIM)],
             [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
         ):
             train_eeg_emb(
@@ -106,7 +109,7 @@ def train_kl_only_models(seed, eeg_path, kin_path, epochs, learning_rate, alpha)
                 model,
                 eeg_data,
                 kin_data,
-                f"{model_path}/embedder_kl/{new_seed}",
+                f"{model_path}/embedder_kl/{EMB_DIM}/{new_seed}",
                 epochs,
                 epochs,
                 learning_rate,
@@ -128,7 +131,7 @@ def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
     eeg_data, kin_data = load_all_data(eeg_path, kin_path)
 
     for model, model_path in zip(
-        [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+        [MlpEmbKin(16, EMB_DIM), RnnEmbKin(16, EMB_DIM), CnnEmbKin(16, EMB_DIM)],
         [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
     ):
         for pre_train in [True, False]:
@@ -178,36 +181,36 @@ def train_classical_and_predictor(
         )
 
 
-def plot_results(eeg_path, kin_path):
-    eeg_data = load_eeg_data(eeg_path)
-    kin_data = load_kinematics_data(kin_path)
-
-    kin_rdms = create_5D_rdms(kin_data)
-
-    training_loss_pca, pca_eeg, data = ana_pca(eeg_data, kin_rdms, eeg_data)
-    training_loss_ica, ica_eeg, data = ana_ica(eeg_data, kin_rdms, eeg_data)
-
-    eeg_rdms = [pca_eeg, ica_eeg]
-
-    plot_rdms(
-        eeg_rdms,
-        kin_rdms,
-        names=["PCA", "ICA", "RNN RDM"],
-    )
-
-    plot_loss("./training/models")
+# def plot_results(eeg_path, kin_path):
+#     eeg_data = load_eeg_data(eeg_path)
+#     kin_data = load_kinematics_data(kin_path)
+#
+#     kin_rdms = create_5D_rdms(kin_data)
+#
+#     training_loss_pca, pca_eeg, data = ana_pca(eeg_data, kin_rdms, eeg_data)
+#     training_loss_ica, ica_eeg, data = ana_ica(eeg_data, kin_rdms, eeg_data)
+#
+#     eeg_rdms = [pca_eeg, ica_eeg]
+#
+#     plot_rdms(
+#         eeg_rdms,
+#         kin_rdms,
+#         names=["PCA", "ICA", "RNN RDM"],
+#     )
+#
+#     plot_loss("./training/models")
 
 
 if __name__ == "__main__":
-    # train_embedders(
-    #     SEED,
-    #     EEG_DATA_PATH,
-    #     KIN_DATA_PATH,
-    #     EPOCHS,
-    #     PRE_TRAIN,
-    #     LEARNING_RATE,
-    #     ALPHA_EMBEDDER,
-    # )
+    train_embedders(
+        SEED,
+        EEG_DATA_PATH,
+        KIN_DATA_PATH,
+        EPOCHS,
+        PRE_TRAIN,
+        LEARNING_RATE,
+        ALPHA_EMBEDDER,
+    )
     # train_kl_only_models(
     #     SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA_EMBEDDER
     # )
@@ -219,11 +222,11 @@ if __name__ == "__main__":
     #     PREDICTOR_LEARNING_RATE_SCHEDULE,
     #     ALPHA_PREDICTOR,
     # )
-    train_classical_and_predictor(
-        SEED,
-        EEG_DATA_PATH,
-        KIN_DATA_PATH,
-        EPOCHS,
-        PREDICTOR_LEARNING_RATE_SCHEDULE,
-        ALPHA_PREDICTOR,
-    )
+    # train_classical_and_predictor(
+    #     SEED,
+    #     EEG_DATA_PATH,
+    #     KIN_DATA_PATH,
+    #     EPOCHS,
+    #     PREDICTOR_LEARNING_RATE_SCHEDULE,
+    #     ALPHA_PREDICTOR,
+    # )

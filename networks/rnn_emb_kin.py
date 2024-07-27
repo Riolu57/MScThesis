@@ -7,10 +7,11 @@ import torch
 
 
 class RnnEmbKin(nn.Module):
-    def __init__(self, in_dim: int):
+    def __init__(self, in_dim: int, emb_dim: int = 1):
         super().__init__()
 
         self.in_dim = in_dim
+        self.emb_dim = emb_dim
 
         self.hidden_size = 10
 
@@ -26,11 +27,11 @@ class RnnEmbKin(nn.Module):
         )
 
         self.mean_head = nn.Sequential(
-            nn.Linear(self.hidden_size, 1, dtype=DTYPE_TORCH),
+            nn.Linear(self.hidden_size, self.emb_dim, dtype=DTYPE_TORCH),
         )
 
         self.var_head = nn.Sequential(
-            nn.Linear(self.hidden_size, 1, dtype=DTYPE_TORCH),
+            nn.Linear(self.hidden_size, self.emb_dim, dtype=DTYPE_TORCH),
         )
 
     @staticmethod
@@ -69,7 +70,9 @@ class RnnEmbKin(nn.Module):
         """
 
         def reparameterization(mean, var):
-            epsilon = torch.rand(data.shape[0], data.shape[1], 1, data.shape[3])
+            epsilon = torch.rand(
+                data.shape[0], data.shape[1], self.emb_dim, data.shape[3]
+            )
             z = mean + var * epsilon
             return z
 
