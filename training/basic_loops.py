@@ -55,7 +55,7 @@ def nn_train_loop(
             loss = loss_fn(mean, var, rdms, y)
         elif isinstance(model, (Predictor)):
             output = model(X)
-            loss = torch.nn.MSELoss()(output, y)
+            loss = loss_fn(output, y)
         else:
             raise NotImplemented("This type of architecture is not yet supported.")
 

@@ -20,7 +20,7 @@ from CONFIG import (
 )
 from training.training_nn import (
     train_eeg_emb,
-    train_network_predictor,
+    train_network_predictor_mse,
     train_classical_predictor,
 )
 
@@ -117,7 +117,7 @@ def train_kl_only_models(seed, eeg_path, kin_path, epochs, learning_rate, alpha)
             )
 
 
-def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
+def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha, emb_dim):
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
@@ -135,7 +135,7 @@ def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
         [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
     ):
         for pre_train in [True, False]:
-            train_network_predictor(
+            train_network_predictor_mse(
                 model,
                 eeg_data,
                 kin_data,
@@ -143,6 +143,7 @@ def train_predictors(seed, eeg_path, kin_path, epochs, learning_rate, alpha):
                 epochs,
                 learning_rate,
                 alpha,
+                emb_dim,
                 pre_train,
             )
 
@@ -202,26 +203,27 @@ def train_classical_and_predictor(
 
 
 if __name__ == "__main__":
-    train_embedders(
-        SEED,
-        EEG_DATA_PATH,
-        KIN_DATA_PATH,
-        EPOCHS,
-        PRE_TRAIN,
-        LEARNING_RATE,
-        ALPHA_EMBEDDER,
-    )
-    # train_kl_only_models(
-    #     SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA_EMBEDDER
-    # )
-    # train_predictors(
+    # train_embedders(
     #     SEED,
     #     EEG_DATA_PATH,
     #     KIN_DATA_PATH,
     #     EPOCHS,
-    #     PREDICTOR_LEARNING_RATE_SCHEDULE,
-    #     ALPHA_PREDICTOR,
+    #     PRE_TRAIN,
+    #     LEARNING_RATE,
+    #     ALPHA_EMBEDDER,
     # )
+    # train_kl_only_models(
+    #     SEED, EEG_DATA_PATH, KIN_DATA_PATH, EPOCHS, LEARNING_RATE, ALPHA_EMBEDDER
+    # )
+    train_predictors(
+        SEED,
+        EEG_DATA_PATH,
+        KIN_DATA_PATH,
+        EPOCHS,
+        PREDICTOR_LEARNING_RATE_SCHEDULE,
+        ALPHA_PREDICTOR,
+        EMB_DIM,
+    )
     # train_classical_and_predictor(
     #     SEED,
     #     EEG_DATA_PATH,

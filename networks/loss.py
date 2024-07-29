@@ -42,5 +42,15 @@ def mixed_loss(
     return fro_loss + KL_loss
 
 
+def corr_loss(outputs: torch.Tensor, targets: torch.Tensor):
+    return -torch.corrcoef(torch.stack((outputs.flatten(), targets.flatten()), dim=0))[
+        0
+    ][1]
+
+
+def mixed_corr_loss(outputs: torch.Tensor, targets: torch.Tensor):
+    return torch.nn.MSELoss()(outputs, targets) - corr_loss(outputs, targets)
+
+
 def empty_loss(*args, **kwargs):
     raise NotImplementedError("This point should have never been reached.")

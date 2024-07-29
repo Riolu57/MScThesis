@@ -8,7 +8,13 @@ from typing import Callable, Iterable
 from torch.utils.data import Dataset
 
 from training.basic_loops import nn_train_loop, nn_test_loop
-from networks.loss import mixed_loss, pre_train_loss, empty_loss
+from networks.loss import (
+    mixed_loss,
+    pre_train_loss,
+    empty_loss,
+    corr_loss,
+    mixed_corr_loss,
+)
 from networks.util import save_model
 from util.network_loading import _get_inference_network
 from networks.predictor import Predictor
@@ -27,8 +33,6 @@ import numpy as np
 import random
 
 from sklearn.base import BaseEstimator
-
-from CONFIG import EMB_DIM
 
 
 def train_network(
@@ -183,7 +187,7 @@ def train_eeg_emb(
     )
 
 
-def train_network_predictor(
+def train_network_predictor_mse(
     model: torch.nn.Module,
     eeg_data: DataConstruct,
     kin_data: DataConstruct,
@@ -191,6 +195,7 @@ def train_network_predictor(
     epochs: int,
     learning_rate: float,
     alpha: float,
+    emb_dim,
     pre_trained_only: bool = True,
 ) -> None:
     """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
@@ -206,8 +211,128 @@ def train_network_predictor(
     @return: None.
     """
 
+    train_network_predictor(
+        model,
+        eeg_data,
+        kin_data,
+        model_path,
+        epochs,
+        learning_rate,
+        alpha,
+        emb_dim,
+        torch.nn.MSELoss(),
+        pre_trained_only=pre_trained_only,
+    )
+
+
+def train_network_predictor_corr(
+    model: torch.nn.Module,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+    emb_dim,
+    pre_trained_only: bool = True,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param model: The model which will be loaded; architecture must be equivalent.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param pre_trained_only: Determines whether to use the pre-trained or fully trained model.
+    @return: None.
+    """
+
+    train_network_predictor(
+        model,
+        eeg_data,
+        kin_data,
+        model_path,
+        epochs,
+        learning_rate,
+        alpha,
+        emb_dim,
+        corr_loss,
+        pre_trained_only=pre_trained_only,
+    )
+
+
+def train_network_predictor_corr_mse(
+    model: torch.nn.Module,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+    emb_dim,
+    pre_trained_only: bool = True,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param model: The model which will be loaded; architecture must be equivalent.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param pre_trained_only: Determines whether to use the pre-trained or fully trained model.
+    @return: None.
+    """
+
+    train_network_predictor(
+        model,
+        eeg_data,
+        kin_data,
+        model_path,
+        epochs,
+        learning_rate,
+        alpha,
+        emb_dim,
+        mixed_corr_loss,
+        pre_trained_only=pre_trained_only,
+    )
+
+
+def train_network_predictor(
+    model: torch.nn.Module,
+    eeg_data: DataConstruct,
+    kin_data: DataConstruct,
+    model_path: str,
+    epochs: int,
+    learning_rate: float,
+    alpha: float,
+    emb_dim: int,
+    loss_function,
+    pre_trained_only: bool = True,
+) -> None:
+    """Trains an RNN which embedds EEG data to resemble kinematics RDMs as closely as possible.
+
+    @param model: The model which will be loaded; architecture must be equivalent.
+    @param eeg_data: Saved EEG data.
+    @param kin_data: Saved kinematics data.
+    @param model_path: Path where the model should be saved.
+    @param epochs: For how many epochs the model should be trained for.
+    @param learning_rate: Learning rate of ADAM.
+    @param alpha: The regularization parameter. [0, \inf]. Higher means stronger regularization.
+    @param pre_trained_only: Determines whether to use the pre-trained or fully trained model.
+    @return: None.
+    """
+
+    try:
+        loss_name = loss_function.__name__
+    except AttributeError:
+        loss_name = loss_function._get_name()
+
     if pre_trained_only:
-        embedder_path = os.path.join(model_path, "embedder_kl", str(EMB_DIM))
+        embedder_path = os.path.join(model_path, "embedder_kl", str(emb_dim))
         seeds = get_subdirs(embedder_path)
 
         for seed in seeds:
@@ -217,14 +342,19 @@ def train_network_predictor(
                 model,
             )
             save_path = os.path.join(
-                model_path, "predictor", str(EMB_DIM), str(seed), "kl_train"
+                model_path,
+                "predictor",
+                str(emb_dim),
+                loss_name,
+                str(seed),
+                "kl_train",
             )
 
             data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
             train_network(
-                Predictor(19, EMB_DIM),
-                torch.nn.MSELoss(),
+                Predictor(19, emb_dim),
+                loss_function,
                 data,
                 int(seed),
                 save_path,
@@ -236,7 +366,7 @@ def train_network_predictor(
             )
 
     else:
-        embedder_path = os.path.join(model_path, "embedder", str(EMB_DIM))
+        embedder_path = os.path.join(model_path, "embedder", str(emb_dim))
         seeds = get_subdirs(embedder_path)
 
         for seed in seeds:
@@ -246,14 +376,19 @@ def train_network_predictor(
                 model,
             )
             save_path = os.path.join(
-                model_path, "predictor", str(EMB_DIM), str(seed), "full_train"
+                model_path,
+                "predictor",
+                str(emb_dim),
+                loss_name,
+                str(seed),
+                "full_train",
             )
 
             data = prepare_model_emb_kin_data(eeg_data, kin_data, model)
 
             train_network(
-                Predictor(19, EMB_DIM),
-                torch.nn.MSELoss(),
+                Predictor(19, emb_dim),
+                loss_function,
                 data,
                 int(seed),
                 save_path,
