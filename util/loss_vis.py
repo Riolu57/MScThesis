@@ -56,6 +56,7 @@ def plot_loss_kl(
     eeg_data: torch.Tensor,
     kin_rdms: torch.Tensor,
     model: torch.nn.Module,
+    emb_dim: int,
 ) -> None:
     """Plots loss functions of all networks saved in the directory. Expects to find models inside of subfolders.
 
@@ -110,7 +111,7 @@ def plot_loss_kl(
 
     axs["Full Loss"].set_yscale("log")
 
-    seed_dirs = get_subdirs(os.path.join(model_path, "embedder_kl"))
+    seed_dirs = get_subdirs(os.path.join(model_path, "embedder_kl", str(emb_dim)))
 
     full_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
 
@@ -126,6 +127,7 @@ def plot_loss_kl(
             os.path.join(
                 model_path,
                 "embedder_kl",
+                str(emb_dim),
                 seed_dir,
                 "data.txt",
             ),
@@ -171,7 +173,11 @@ def plot_loss_kl(
         model.load_state_dict(
             torch.load(
                 os.path.join(
-                    model_path, "embedder_kl", seed_dir, "lowest_val_loss_pre_train"
+                    model_path,
+                    "embedder_kl",
+                    str(emb_dim),
+                    seed_dir,
+                    "lowest_val_loss_pre_train",
                 )
             )["model_state_dict"]
         )
@@ -181,8 +187,14 @@ def plot_loss_kl(
         reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
         embeddings = model(reshaped_eeg)[2].detach()
 
+        new_embeddings = embeddings.reshape(
+            embeddings.shape[0],
+            embeddings.shape[1],
+            embeddings.shape[2] * embeddings.shape[3],
+        )
+
         # Turn output into RDM and save it
-        output_rdms = create_rdms(torch.squeeze(embeddings))
+        output_rdms = create_rdms(new_embeddings)
         full_rdms[idx] = output_rdms - kin_rdms
 
     train_loss = np.mean(train_loss, axis=0)
@@ -254,7 +266,10 @@ def plot_loss_kl(
     plt.tight_layout()
     # plt.show()
     plt.savefig(
-        os.path.join(model_path, f"{name}_loss_plot_kl.pdf"), bbox_inches="tight"
+        os.path.join(
+            model_path, "embedder_kl", str(emb_dim), f"{name}_loss_plot_kl.pdf"
+        ),
+        bbox_inches="tight",
     )
 
 
@@ -263,6 +278,7 @@ def plot_loss_rdm(
     eeg_data: torch.Tensor,
     kin_rdms: torch.Tensor,
     model: torch.nn.Module,
+    emb_dim: int,
 ) -> None:
     """Plots loss functions of all networks saved in the directory. Expects to find models inside of subfolders.
 
@@ -323,7 +339,7 @@ def plot_loss_rdm(
     axs["Pre. Loss"].set_yscale("log")
     axs["Full Loss"].set_yscale("log")
 
-    seed_dirs = get_subdirs(os.path.join(model_path, "embedder"))
+    seed_dirs = get_subdirs(os.path.join(model_path, "embedder", str(emb_dim)))
 
     full_rdms = np.zeros((len(seed_dirs), *kin_rdms.shape)) + 5
 
@@ -339,6 +355,7 @@ def plot_loss_rdm(
             os.path.join(
                 model_path,
                 "embedder",
+                str(emb_dim),
                 seed_dir,
                 "data.txt",
             ),
@@ -399,7 +416,9 @@ def plot_loss_rdm(
         # First load embedder
         model.load_state_dict(
             torch.load(
-                os.path.join(model_path, "embedder", seed_dir, "lowest_val_loss")
+                os.path.join(
+                    model_path, "embedder", str(emb_dim), seed_dir, "lowest_val_loss"
+                )
             )["model_state_dict"]
         )
         model.eval()
@@ -408,8 +427,14 @@ def plot_loss_rdm(
         reshaped_eeg = adjust_5D_data(torch.Tensor(eeg_data))
         embeddings = model(reshaped_eeg)[2].detach()
 
+        new_embeddings = embeddings.reshape(
+            embeddings.shape[0],
+            embeddings.shape[1],
+            embeddings.shape[2] * embeddings.shape[3],
+        )
+
         # Turn output into RDM and save it
-        output_rdms = create_rdms(torch.squeeze(embeddings))
+        output_rdms = create_rdms(new_embeddings)
         full_rdms[idx] = output_rdms - kin_rdms
 
     train_loss = np.mean(train_loss, axis=0)
@@ -504,7 +529,10 @@ def plot_loss_rdm(
 
     # plt.show()
     plt.savefig(
-        os.path.join(model_path, f"{name}_loss_plot_full.pdf"), bbox_inches="tight"
+        os.path.join(
+            model_path, "embedder", str(emb_dim), f"{name}_loss_plot_full.pdf"
+        ),
+        bbox_inches="tight",
     )
 
 
@@ -513,6 +541,8 @@ def plot_reconstruction_and_error(
     eeg_data: torch.Tensor,
     kin_data: torch.Tensor,
     embedder: torch.nn.Module,
+    emb_dim: int,
+    loss_fn: str,
 ):
     """
 
@@ -600,7 +630,16 @@ def plot_reconstruction_and_error(
         )
 
     # To collect for Boxplot, s.t. x = dict.keys(), y = dict.values()
-    nrmse_data = np.zeros((2, len(get_subdirs(os.path.join(model_path, "predictor")))))
+    nrmse_data = np.zeros(
+        (
+            2,
+            len(
+                get_subdirs(
+                    os.path.join(model_path, "predictor", str(emb_dim), loss_fn)
+                )
+            ),
+        )
+    )
 
     # Separate folders for models fully trained and only pre-trained
     for train_idx, (
@@ -624,7 +663,9 @@ def plot_reconstruction_and_error(
     ):
         train_name = " ".join(train_folder.capitalize().split("_"))
 
-        seed_dirs = get_subdirs(os.path.join(model_path, "predictor"))
+        seed_dirs = get_subdirs(
+            os.path.join(model_path, "predictor", str(emb_dim), loss_fn)
+        )
 
         # Track all outputs per train state to average over them later
         train_specific_outputs = np.zeros((len(seed_dirs), *kin_data.shape))
@@ -639,7 +680,9 @@ def plot_reconstruction_and_error(
             # First load embedder
             embedder.load_state_dict(
                 torch.load(
-                    os.path.join(model_path, embed_folder, seed_dir, embedder_name)
+                    os.path.join(
+                        model_path, embed_folder, str(emb_dim), seed_dir, embedder_name
+                    )
                 )["model_state_dict"]
             )
             embedder.eval()
@@ -656,6 +699,8 @@ def plot_reconstruction_and_error(
                     os.path.join(
                         model_path,
                         "predictor",
+                        str(emb_dim),
+                        loss_fn,
                         seed_dir,
                         train_folder,
                         "lowest_val_loss",
@@ -810,7 +855,10 @@ def plot_reconstruction_and_error(
 
     plt.tight_layout()
     # plt.show()
-    plt.savefig(os.path.join(model_path, f"{name}_rec_plot.pdf"), bbox_inches="tight")
+    plt.savefig(
+        os.path.join(model_path, str(emb_dim), loss_fn, f"{name}_rec_plot.pdf"),
+        bbox_inches="tight",
+    )
 
 
 def plot_reconstruction_and_error_class_emb(

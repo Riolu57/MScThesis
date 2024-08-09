@@ -30,7 +30,10 @@ parser.add_argument(
     "--model_type", action="store", choices=["MLP", "CNN", "RNN"], required=True
 )
 parser.add_argument(
-    "--rdm_trained", action="store", choices=[True, False], required=True, type=bool
+    "--rdm_trained",
+    action="store",
+    choices=["True", "False"],
+    required=True,
 )
 parser.add_argument(
     "--emb_dim",
@@ -44,6 +47,11 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
+
+if args.rdm_trained == "True":
+    kl_train = True
+elif args.rdm_trained == "False":
+    kl_train = False
 
 if args.model_type == "MLP":
     model = MlpEmbKin(16, args.emb_dim)
@@ -82,5 +90,5 @@ train_network_predictor(
     ALPHA_PREDICTOR,
     args.emb_dim,
     loss_function=loss,
-    pre_trained_only=args.rdm_trained,
+    pre_trained_only=kl_train,
 )

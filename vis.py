@@ -20,7 +20,7 @@ cnn_emb_kin_path = "./models/cnn_emb_kin/001"
 pca_predictor_path = "./models/pca/001"
 ica_predictor_path = "./models/ica/001"
 
-import sklearn
+# import sklearn
 
 (train_eeg_data, val_eeg_data, test_eeg_data), (
     train_kin,
@@ -28,28 +28,36 @@ import sklearn
     test_kin,
 ) = load_all_data(EEG_DATA_PATH, KIN_DATA_PATH)
 
-# for model, model_path in zip(
-#     [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
-#     [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
-# ):
-#     plot_reconstruction_and_error(
-#         model_path,
-#         torch.Tensor(val_eeg_data),
-#         torch.squeeze(torch.Tensor(val_kin)),
-#         model,
-#     )
-#     plot_loss_kl(
-#         model_path,
-#         torch.Tensor(val_eeg_data),
-#         create_5D_rdms(torch.Tensor(val_kin)),
-#         model,
-#     )
-#     plot_loss_rdm(
-#         model_path,
-#         torch.Tensor(val_eeg_data),
-#         create_5D_rdms(torch.Tensor(val_kin)),
-#         model,
-#     )
+for model, model_path in zip(
+    [MlpEmbKin(16), RnnEmbKin(16), CnnEmbKin(16)],
+    [mlp_emb_kin_path, rnn_emb_kin_path, cnn_emb_kin_path],
+):
+    for emb_dim in range(1, 2):
+        plot_loss_kl(
+            model_path,
+            torch.Tensor(val_eeg_data),
+            create_5D_rdms(torch.Tensor(val_kin)),
+            model,
+            emb_dim,
+        )
+        plot_loss_rdm(
+            model_path,
+            torch.Tensor(val_eeg_data),
+            create_5D_rdms(torch.Tensor(val_kin)),
+            model,
+            emb_dim,
+        )
+        for loss_fn in ["mixed_corr_loss", "MSELoss", "corr_loss"]:
+            # for loss_fn in ["MSELoss"]:
+            plot_reconstruction_and_error(
+                model_path,
+                torch.Tensor(val_eeg_data),
+                torch.squeeze(torch.Tensor(val_kin)),
+                model,
+                emb_dim,
+                loss_fn,
+            )
+
 
 # plot_reconstruction_and_error_class_emb(
 #     pca_predictor_path,
@@ -72,24 +80,24 @@ import sklearn
 #     sklearn.decomposition.FastICA(n_components=1),
 # )
 
-plot_rmds(
-    pca_predictor_path,
-    (train_eeg_data, val_eeg_data, test_eeg_data),
-    (
-        train_kin,
-        val_kin,
-        test_kin,
-    ),
-    sklearn.decomposition.PCA(n_components=1),
-)
-
-plot_rmds(
-    ica_predictor_path,
-    (train_eeg_data, val_eeg_data, test_eeg_data),
-    (
-        train_kin,
-        val_kin,
-        test_kin,
-    ),
-    sklearn.decomposition.FastICA(n_components=1),
-)
+# plot_rmds(
+#     pca_predictor_path,
+#     (train_eeg_data, val_eeg_data, test_eeg_data),
+#     (
+#         train_kin,
+#         val_kin,
+#         test_kin,
+#     ),
+#     sklearn.decomposition.PCA(n_components=1),
+# )
+#
+# plot_rmds(
+#     ica_predictor_path,
+#     (train_eeg_data, val_eeg_data, test_eeg_data),
+#     (
+#         train_kin,
+#         val_kin,
+#         test_kin,
+#     ),
+#     sklearn.decomposition.FastICA(n_components=1),
+# )
